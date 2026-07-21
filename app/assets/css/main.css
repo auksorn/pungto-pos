@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: 'Public Sans', sans-serif;
+
+  /* Clay - dusty terracotta pastel, used as the primary color */
+  --color-clay-50: #FAF3EF;
+  --color-clay-100: #F3E4DC;
+  --color-clay-200: #E7C9B8;
+  --color-clay-300: #D9AC94;
+  --color-clay-400: #C88F6F;
+  --color-clay-500: #B5744F;
+  --color-clay-600: #9A5D3C;
+  --color-clay-700: #7C4A31;
+  --color-clay-800: #603A29;
+  --color-clay-900: #4A2E22;
+  --color-clay-950: #2A1A13;
+}
