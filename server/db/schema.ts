@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm'
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // ---------- Branches & Employees ----------
 
@@ -58,20 +58,31 @@ export const optionChoices = sqliteTable('option_choices', {
 
 // ---------- Inventory ----------
 
+// Master catalog of raw materials, shared across branches (e.g. "นมสด" is the
+// same ingredient everywhere — only its stock quantity is per-branch).
+export const ingredients = sqliteTable('ingredients', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  unit: text('unit').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+})
+
+// Per-branch stock level for an ingredient
 export const stockItems = sqliteTable('stock_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   branchId: integer('branch_id').notNull().references(() => branches.id),
-  name: text('name').notNull(),
-  unit: text('unit').notNull(),
+  ingredientId: integer('ingredient_id').notNull().references(() => ingredients.id),
   quantity: real('quantity').notNull().default(0),
   minThreshold: real('min_threshold').notNull().default(0)
-})
+}, table => [
+  uniqueIndex('stock_items_branch_ingredient_unique').on(table.branchId, table.ingredientId)
+])
 
-// Recipe: how much of each stock item a product consumes
+// Recipe: how much of each ingredient a product consumes, regardless of branch
 export const productIngredients = sqliteTable('product_ingredients', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   productId: integer('product_id').notNull().references(() => products.id),
-  stockItemId: integer('stock_item_id').notNull().references(() => stockItems.id),
+  ingredientId: integer('ingredient_id').notNull().references(() => ingredients.id),
   quantity: real('quantity').notNull()
 })
 
@@ -146,8 +157,14 @@ export const optionChoicesRelations = relations(optionChoices, ({ one }) => ({
   group: one(optionGroups, { fields: [optionChoices.optionGroupId], references: [optionGroups.id] })
 }))
 
+export const ingredientsRelations = relations(ingredients, ({ many }) => ({
+  stockItems: many(stockItems),
+  productIngredients: many(productIngredients)
+}))
+
 export const stockItemsRelations = relations(stockItems, ({ one, many }) => ({
   branch: one(branches, { fields: [stockItems.branchId], references: [branches.id] }),
+  ingredient: one(ingredients, { fields: [stockItems.ingredientId], references: [ingredients.id] }),
   transactions: many(stockTransactions)
 }))
 
@@ -158,7 +175,7 @@ export const stockTransactionsRelations = relations(stockTransactions, ({ one })
 
 export const productIngredientsRelations = relations(productIngredients, ({ one }) => ({
   product: one(products, { fields: [productIngredients.productId], references: [products.id] }),
-  stockItem: one(stockItems, { fields: [productIngredients.stockItemId], references: [stockItems.id] })
+  ingredient: one(ingredients, { fields: [productIngredients.ingredientId], references: [ingredients.id] })
 }))
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({

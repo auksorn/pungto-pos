@@ -1,9 +1,15 @@
 <script setup lang="ts">
+interface Ingredient {
+  id: number
+  name: string
+  unit: string
+}
+
 interface StockItem {
   id: number
   branchId: number
-  name: string
-  unit: string
+  ingredientId: number
+  ingredient: Ingredient
   quantity: number
   minThreshold: number
 }
@@ -18,7 +24,7 @@ function isLow(item: StockItem) {
   return item.quantity <= item.minThreshold
 }
 
-// ---------- Create/edit stock item ----------
+// ---------- Create stock item / edit threshold ----------
 
 const itemModalOpen = ref(false)
 const editingItem = ref<StockItem | null>(null)
@@ -34,8 +40,8 @@ function openNewItem() {
 
 function openEditItem(item: StockItem) {
   editingItem.value = item
-  itemForm.name = item.name
-  itemForm.unit = item.unit
+  itemForm.name = item.ingredient.name
+  itemForm.unit = item.ingredient.unit
   itemForm.minThreshold = item.minThreshold
   itemModalOpen.value = true
 }
@@ -43,7 +49,7 @@ function openEditItem(item: StockItem) {
 async function submitItem() {
   try {
     if (editingItem.value) {
-      await $fetch(`/api/stock-items/${editingItem.value.id}`, { method: 'PATCH', body: itemForm })
+      await $fetch(`/api/stock-items/${editingItem.value.id}`, { method: 'PATCH', body: { minThreshold: itemForm.minThreshold } })
     } else {
       await $fetch('/api/stock-items', { method: 'POST', body: itemForm })
     }
@@ -143,7 +149,7 @@ async function submitTx() {
           <div class="min-w-0">
             <div class="flex items-center gap-2">
               <p class="font-medium truncate">
-                {{ item.name }}
+                {{ item.ingredient.name }}
               </p>
               <UBadge
                 v-if="isLow(item)"
@@ -154,7 +160,7 @@ async function submitTx() {
               </UBadge>
             </div>
             <p class="text-sm text-muted">
-              คงเหลือ {{ item.quantity }} {{ item.unit }} · ขั้นต่ำ {{ item.minThreshold }} {{ item.unit }}
+              คงเหลือ {{ item.quantity }} {{ item.ingredient.unit }} · ขั้นต่ำ {{ item.minThreshold }} {{ item.ingredient.unit }}
             </p>
           </div>
           <div class="flex items-center gap-1 shrink-0">
@@ -200,18 +206,25 @@ async function submitTx() {
           class="flex flex-col gap-4"
           @submit.prevent="submitItem"
         >
-          <UFormField label="ชื่อวัตถุดิบ">
-            <UInput
-              v-model="itemForm.name"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="หน่วยนับ (เช่น กรัม, มล., ถุง)">
-            <UInput
-              v-model="itemForm.unit"
-              class="w-full"
-            />
-          </UFormField>
+          <template v-if="editingItem">
+            <p class="text-sm text-muted">
+              {{ editingItem.ingredient.name }} ({{ editingItem.ingredient.unit }})
+            </p>
+          </template>
+          <template v-else>
+            <UFormField label="ชื่อวัตถุดิบ">
+              <UInput
+                v-model="itemForm.name"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="หน่วยนับ (เช่น กรัม, มล., ถุง)">
+              <UInput
+                v-model="itemForm.unit"
+                class="w-full"
+              />
+            </UFormField>
+          </template>
           <UFormField label="สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อต่ำกว่านี้)">
             <UInputNumber
               v-model="itemForm.minThreshold"
@@ -231,7 +244,7 @@ async function submitTx() {
 
     <UModal
       v-model:open="txModalOpen"
-      :title="txItem ? `ทำรายการ: ${txItem.name}` : 'ทำรายการ'"
+      :title="txItem ? `ทำรายการ: ${txItem.ingredient.name}` : 'ทำรายการ'"
     >
       <template #body>
         <div class="flex flex-col gap-4">
@@ -248,7 +261,7 @@ async function submitTx() {
             </UButton>
           </div>
 
-          <UFormField :label="txType === 'adjust' ? 'จำนวนที่เปลี่ยนแปลง (+/-)' : `จำนวน (${txItem?.unit})`">
+          <UFormField :label="txType === 'adjust' ? 'จำนวนที่เปลี่ยนแปลง (+/-)' : `จำนวน (${txItem?.ingredient.unit})`">
             <UInputNumber
               v-model="txQuantity"
               class="w-full"

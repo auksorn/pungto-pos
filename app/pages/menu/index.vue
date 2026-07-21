@@ -24,12 +24,28 @@ interface Product {
   category: Category | null
 }
 
+interface Ingredient {
+  id: number
+  name: string
+  unit: string
+}
+
+interface RecipeRow {
+  id: number
+  productId: number
+  ingredientId: number
+  quantity: number
+  ingredient: Ingredient
+}
+
 const toast = useToast()
 
 const { data: categories, refresh: refreshCategories } = await useFetch<Category[]>('/api/categories')
 const { data: products, refresh: refreshProducts } = await useFetch<Product[]>('/api/products')
+const { data: ingredients, refresh: refreshIngredients } = await useFetch<Ingredient[]>('/api/ingredients')
 
 const categoryOptions = computed(() => (categories.value ?? []).map(c => ({ label: c.name, value: c.id })))
+const ingredientOptions = computed(() => (ingredients.value ?? []).map(i => ({ label: `${i.name} (${i.unit})`, value: i.id })))
 
 // ---------- Category form ----------
 
@@ -138,6 +154,74 @@ async function setProductActive(product: Product, isActive: boolean) {
     toast.add({ title: err?.data?.statusMessage ?? 'ทำรายการไม่สำเร็จ', color: 'error' })
   }
 }
+
+// ---------- Recipe (product ingredients) ----------
+
+const recipeModalOpen = ref(false)
+const recipeProduct = ref<Product | null>(null)
+const recipeRows = ref<RecipeRow[]>([])
+const newRecipeIngredientId = ref<number | null>(null)
+const newRecipeQuantity = ref(0)
+
+async function openRecipeModal(product: Product) {
+  recipeProduct.value = product
+  newRecipeIngredientId.value = null
+  newRecipeQuantity.value = 0
+  recipeModalOpen.value = true
+  recipeRows.value = await $fetch<RecipeRow[]>(`/api/products/${product.id}/ingredients`)
+}
+
+async function addRecipeRow() {
+  if (!recipeProduct.value || !newRecipeIngredientId.value || newRecipeQuantity.value <= 0) {
+    toast.add({ title: 'กรุณาเลือกวัตถุดิบและกรอกปริมาณ', color: 'error' })
+    return
+  }
+  try {
+    await $fetch(`/api/products/${recipeProduct.value.id}/ingredients`, {
+      method: 'POST',
+      body: { ingredientId: newRecipeIngredientId.value, quantity: newRecipeQuantity.value }
+    })
+    recipeRows.value = await $fetch<RecipeRow[]>(`/api/products/${recipeProduct.value.id}/ingredients`)
+    newRecipeIngredientId.value = null
+    newRecipeQuantity.value = 0
+    toast.add({ title: 'เพิ่มวัตถุดิบในสูตรสำเร็จ', color: 'success' })
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'เพิ่มไม่สำเร็จ', color: 'error' })
+  }
+}
+
+async function deleteRecipeRow(row: RecipeRow) {
+  if (!recipeProduct.value) return
+  try {
+    await $fetch(`/api/products/${recipeProduct.value.id}/ingredients/${row.id}`, { method: 'DELETE' })
+    recipeRows.value = recipeRows.value.filter(r => r.id !== row.id)
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'ลบไม่สำเร็จ', color: 'error' })
+  }
+}
+
+// ---------- Quick-create a new ingredient (from the recipe modal) ----------
+
+const newIngredientModalOpen = ref(false)
+const newIngredientForm = reactive({ name: '', unit: '' })
+
+function openNewIngredient() {
+  newIngredientForm.name = ''
+  newIngredientForm.unit = ''
+  newIngredientModalOpen.value = true
+}
+
+async function submitNewIngredient() {
+  try {
+    const created = await $fetch<Ingredient>('/api/ingredients', { method: 'POST', body: newIngredientForm })
+    await refreshIngredients()
+    newRecipeIngredientId.value = created.id
+    newIngredientModalOpen.value = false
+    toast.add({ title: 'เพิ่มวัตถุดิบสำเร็จ', color: 'success' })
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'เพิ่มไม่สำเร็จ', color: 'error' })
+  }
+}
 </script>
 
 <template>
@@ -231,6 +315,14 @@ async function setProductActive(product: Product, isActive: boolean) {
             >
               {{ product.isActive ? 'ขายอยู่' : 'ปิดขาย' }}
             </UBadge>
+            <UButton
+              icon="i-lucide-flask-conical"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              title="สูตร/วัตถุดิบ"
+              @click="openRecipeModal(product)"
+            />
             <UButton
               icon="i-lucide-pencil"
               size="xs"
@@ -331,6 +423,107 @@ async function setProductActive(product: Product, isActive: boolean) {
             <UInput
               v-model="productForm.imageUrl"
               placeholder="https://..."
+              class="w-full"
+            />
+          </UFormField>
+          <UButton
+            type="submit"
+            block
+          >
+            บันทึก
+          </UButton>
+        </form>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="recipeModalOpen"
+      :title="recipeProduct ? `สูตร: ${recipeProduct.name}` : 'สูตร'"
+    >
+      <template #body>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col divide-y divide-default">
+            <div
+              v-for="row in recipeRows"
+              :key="row.id"
+              class="flex items-center justify-between py-2 gap-2"
+            >
+              <span>{{ row.ingredient.name }}</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-sm text-muted">{{ row.quantity }} {{ row.ingredient.unit }}</span>
+                <UButton
+                  icon="i-lucide-trash-2"
+                  size="xs"
+                  color="error"
+                  variant="ghost"
+                  @click="deleteRecipeRow(row)"
+                />
+              </div>
+            </div>
+            <p
+              v-if="!recipeRows.length"
+              class="text-muted text-sm py-2"
+            >
+              ยังไม่มีวัตถุดิบในสูตรนี้
+            </p>
+          </div>
+
+          <div class="flex items-end gap-2">
+            <UFormField
+              label="วัตถุดิบ"
+              class="flex-1"
+            >
+              <USelect
+                v-model="newRecipeIngredientId"
+                :items="ingredientOptions"
+                placeholder="เลือกวัตถุดิบ"
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="ปริมาณที่ใช้">
+              <UInputNumber
+                v-model="newRecipeQuantity"
+                :min="0"
+                class="w-28"
+              />
+            </UFormField>
+            <UButton
+              icon="i-lucide-plus"
+              @click="addRecipeRow"
+            >
+              เพิ่ม
+            </UButton>
+          </div>
+          <UButton
+            variant="link"
+            size="sm"
+            class="self-start p-0"
+            @click="openNewIngredient"
+          >
+            + เพิ่มวัตถุดิบใหม่ที่ยังไม่มีในระบบ
+          </UButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="newIngredientModalOpen"
+      title="เพิ่มวัตถุดิบใหม่"
+    >
+      <template #body>
+        <form
+          class="flex flex-col gap-4"
+          @submit.prevent="submitNewIngredient"
+        >
+          <UFormField label="ชื่อวัตถุดิบ">
+            <UInput
+              v-model="newIngredientForm.name"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField label="หน่วยนับ (เช่น กรัม, มล., ถุง)">
+            <UInput
+              v-model="newIngredientForm.unit"
               class="w-full"
             />
           </UFormField>

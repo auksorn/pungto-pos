@@ -17,8 +17,9 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] `categories` (หมวดหมู่สินค้า) - เช่น เครื่องดื่ม, ขนม
 - [x] `products` (สินค้า/เมนู) - id, category_id, name, price, image, is_active
 - [x] `option_groups` / `option_choices` (ตัวเลือก เช่น หวานน้อย/ไข่มุก/ไซส์) - price adjustment
-- [x] `stock_items` (วัตถุดิบ/สต๊อก) - id, branch_id, name, unit, quantity, min_threshold
-- [x] `product_ingredients` (recipe mapping: 1 สินค้า ใช้วัตถุดิบอะไรบ้าง ปริมาณเท่าไหร่)
+- [x] `ingredients` (แคตตาล็อกวัตถุดิบกลาง ใช้ร่วมกันทุกสาขา) - id, name, unit
+- [x] `stock_items` (สต๊อกของแต่ละสาขา) - id, branch_id, ingredient_id, quantity, min_threshold
+- [x] `product_ingredients` (recipe mapping: 1 สินค้า ใช้วัตถุดิบอะไรบ้าง ปริมาณเท่าไหร่ — อ้างอิง ingredient_id ไม่ผูกกับสาขา)
 - [x] `orders` - id, branch_id, employee_id, status (open/paid/cancelled), created_at
 - [x] `order_items` - order_id, product_id, options (json), quantity, price
 - [x] `payments` - order_id, method (cash/transfer/qr), amount, received_at
@@ -50,9 +51,9 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] CRUD หมวดหมู่สินค้า (บล็อกการลบถ้ายังมีสินค้าอยู่ในหมวดหมู่)
 - [x] CRUD สินค้า (ชื่อ, ราคา, รูป, หมวดหมู่, เปิด/ปิดขาย — ปิดขายใช้ soft-delete เพื่อไม่กระทบประวัติออเดอร์ในอนาคต)
 - [ ] ตั้งค่าตัวเลือกสินค้า (ความหวาน, ท็อปปิ้ง/ไข่มุก, ไซส์, ร้อน/เย็น) พร้อมราคาเพิ่ม — schema มีแล้ว (`option_groups`/`option_choices`) แต่ยังไม่มี UI
-- [ ] เชื่อมสินค้ากับสูตร/วัตถุดิบที่ใช้ (สำหรับตัดสต๊อกอัตโนมัติ)
+- [x] เชื่อมสินค้ากับสูตร/วัตถุดิบที่ใช้ (สำหรับตัดสต๊อกอัตโนมัติ) — ปุ่ม "สูตร/วัตถุดิบ" ในหน้าจัดการเมนู เพิ่ม/ลบ/แก้ปริมาณวัตถุดิบต่อสินค้าได้ (อ้างอิง ingredient กลาง ใช้ได้ทุกสาขา)
 
-> หน้าจัดการ: [app/pages/menu/index.vue](app/pages/menu/index.vue) (จำกัดสิทธิ์ owner/manager) · API: [server/api/categories/](server/api/categories/), [server/api/products/](server/api/products/)
+> หน้าจัดการ: [app/pages/menu/index.vue](app/pages/menu/index.vue) (จำกัดสิทธิ์ owner/manager) · API: [server/api/categories/](server/api/categories/), [server/api/products/](server/api/products/), [server/api/products/[id]/ingredients/](server/api/products/%5Bid%5D/ingredients/), [server/api/ingredients/](server/api/ingredients/)
 
 ## 5. ระบบรับออเดอร์ (Order Taking)
 - [x] หน้าจอ POS เลือกสินค้า + จำนวน (ยังไม่รวมตัวเลือกสินค้า เช่น ความหวาน/ไซส์)
@@ -68,19 +69,20 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] เลือกช่องทางชำระเงิน (เงินสด/โอน/QR พร้อมเพย์)
 - [x] คำนวณเงินทอน (กรณีเงินสด)
 - [ ] พิมพ์/แสดงใบเสร็จ (receipt) — มีหน้าใบเสร็จสรุปแล้ว แต่ยังไม่มีรูปแบบสำหรับพิมพ์
-- [ ] ปิดออเดอร์ → ตัดสต๊อกอัตโนมัติตาม recipe — รอทำหลังมีระบบสต๊อกพื้นฐาน (ข้อ 7)
+- [x] ปิดออเดอร์ → ตัดสต๊อกอัตโนมัติตาม recipe — ตัดในธุรกรรมเดียวกับ checkout แบบ best-effort: ถ้าสาขานั้นไม่มีวัตถุดิบชิ้นนั้นในสต๊อก จะข้ามการตัด (ไม่บล็อกการขาย เพราะร้านนี้ต้องชำระเงินสำเร็จเสมอ)
 
 > POS (ตะกร้า+ชำระเงินทันที): [app/pages/pos/index.vue](app/pages/pos/index.vue) · หน้าใบเสร็จ: [app/pages/pos/orders/[id].vue](app/pages/pos/orders/%5Bid%5D.vue) · API: [server/api/orders/](server/api/orders/) (`POST /checkout` = สร้าง+จ่ายในคำขอเดียว — endpoint เดียวที่สร้างออเดอร์ได้)
 
 ## 7. จัดการสต๊อก (Inventory)
-- [x] CRUD วัตถุดิบ/สต๊อกต่อสาขา (เพิ่ม/แก้ไข/ลบ — จำกัดสิทธิ์ owner/manager, ลบไม่ได้ถ้ามีประวัติรายการหรือถูกใช้ในสูตรสินค้า)
+- [x] CRUD วัตถุดิบ/สต๊อกต่อสาขา (เพิ่ม/แก้ไข/ลบ — จำกัดสิทธิ์ owner/manager, ลบไม่ได้ถ้ามีประวัติรายการ) — ชื่อ/หน่วยนับมาจาก ingredient กลาง (ดูข้อ 1), แก้ไขได้แค่สต๊อกขั้นต่ำต่อสาขา
 - [x] รับสินค้าเข้าสต๊อก (stock in) พร้อมบันทึกผู้ทำรายการ (เพิ่มคอลัมน์ `employee_id` ใน `stock_transactions`)
-- [ ] ตัดสต๊อกอัตโนมัติเมื่อขายสินค้า (ตาม recipe mapping) — รอทำ (ต้องมี UI ผูกสูตรสินค้ากับวัตถุดิบก่อน ดูข้อ 4)
+- [x] ตัดสต๊อกอัตโนมัติเมื่อขายสินค้า (ตาม recipe mapping) — ดูข้อ 6
 - [x] ปรับสต๊อกด้วยมือ (stock adjustment) พร้อมเหตุผล (ต้องระบุเหตุผลสำหรับ เบิกออก/ปรับยอด)
 - [x] แจ้งเตือนสต๊อกใกล้หมด (min threshold) — badge "สต๊อกใกล้หมด" ในหน้าจัดการสต๊อก
 - [x] ประวัติการเคลื่อนไหวสต๊อก (stock transaction log) — API พร้อมใช้ (`GET /api/stock-items/:id/transactions`), ยังไม่มี UI แสดงประวัติในหน้าเว็บ
 
-> หน้าจัดการ: [app/pages/stock/index.vue](app/pages/stock/index.vue) (ทุกคนทำรายการเข้า/ออกได้ แก้ไข/ลบวัตถุดิบจำกัด owner/manager) · API: [server/api/stock-items/](server/api/stock-items/)
+> หน้าจัดการ: [app/pages/stock/index.vue](app/pages/stock/index.vue) (ทุกคนทำรายการเข้า/ออกได้ แก้ไข/ลบวัตถุดิบจำกัด owner/manager) · API: [server/api/stock-items/](server/api/stock-items/), [server/api/ingredients/](server/api/ingredients/)
+> เพิ่มวัตถุดิบใหม่จากหน้าสต๊อกได้โดยพิมพ์ชื่อ+หน่วยตรงๆ (ระบบจะ reuse ingredient เดิมถ้าชื่อซ้ำและหน่วยตรงกัน หรือสร้างใหม่ถ้ายังไม่มี)
 
 ## 8. รายงาน/Dashboard
 - [ ] ยอดขายรายวัน/รายเดือน ต่อสาขา

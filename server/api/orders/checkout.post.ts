@@ -1,6 +1,6 @@
-import { inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '../../db'
-import { orders, orderItems, payments, products } from '../../db/schema'
+import { orders, orderItems, payments, products, productIngredients, stockItems, stockTransactions } from '../../db/schema'
 
 interface CartItem { productId: number, quantity: number }
 
@@ -37,6 +37,16 @@ export default defineEventHandler(async (event) => {
 
   const total = items.reduce((sum, item) => sum + productMap.get(item.productId)!.price * item.quantity, 0)
 
+  // Sum how much of each ingredient this cart consumes, across all items sharing it
+  const recipeRows = await db.select().from(productIngredients).where(inArray(productIngredients.productId, items.map(i => i.productId)))
+  const consumption = new Map<number, number>()
+  for (const item of items) {
+    for (const recipe of recipeRows) {
+      if (recipe.productId !== item.productId) continue
+      consumption.set(recipe.ingredientId, (consumption.get(recipe.ingredientId) ?? 0) + recipe.quantity * item.quantity)
+    }
+  }
+
   let change = 0
   if (method === 'cash') {
     const received = typeof body?.amountReceived === 'number' ? body.amountReceived : total
@@ -59,6 +69,26 @@ export default defineEventHandler(async (event) => {
     })).run()
 
     tx.insert(payments).values({ orderId: order.id, method, amount: total }).run()
+
+    // Best-effort auto-deduct: if this branch doesn't stock an ingredient the
+    // recipe calls for, skip it rather than blocking the sale (payment is
+    // always immediate here — see TODO.md section 5/6).
+    for (const [ingredientId, quantity] of consumption) {
+      const stockItem = tx.select().from(stockItems)
+        .where(and(eq(stockItems.branchId, branchId), eq(stockItems.ingredientId, ingredientId)))
+        .get()
+      if (!stockItem) continue
+
+      tx.update(stockItems).set({ quantity: stockItem.quantity - quantity }).where(eq(stockItems.id, stockItem.id)).run()
+      tx.insert(stockTransactions).values({
+        stockItemId: stockItem.id,
+        branchId,
+        employeeId: user.id,
+        type: 'out',
+        quantity,
+        refOrderId: order.id
+      }).run()
+    }
 
     return order.id
   })
