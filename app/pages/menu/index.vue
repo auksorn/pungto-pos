@@ -38,6 +38,21 @@ interface RecipeRow {
   ingredient: Ingredient
 }
 
+interface OptionChoice {
+  id: number
+  optionGroupId: number
+  name: string
+  priceDelta: number
+}
+
+interface OptionGroupRow {
+  id: number
+  productId: number
+  name: string
+  isRequired: boolean
+  choices: OptionChoice[]
+}
+
 const toast = useToast()
 
 const { data: categories, refresh: refreshCategories } = await useFetch<Category[]>('/api/categories')
@@ -222,6 +237,91 @@ async function submitNewIngredient() {
     toast.add({ title: err?.data?.statusMessage ?? 'เพิ่มไม่สำเร็จ', color: 'error' })
   }
 }
+
+// ---------- Product options (option groups + choices) ----------
+
+const optionsModalOpen = ref(false)
+const optionsProduct = ref<Product | null>(null)
+const optionGroupRows = ref<OptionGroupRow[]>([])
+const newGroupName = ref('')
+const newGroupRequired = ref(false)
+const newChoiceName = reactive<Record<number, string>>({})
+const newChoiceDelta = reactive<Record<number, number>>({})
+
+async function openOptionsModal(product: Product) {
+  optionsProduct.value = product
+  newGroupName.value = ''
+  newGroupRequired.value = false
+  optionsModalOpen.value = true
+  optionGroupRows.value = await $fetch<OptionGroupRow[]>(`/api/products/${product.id}/options`)
+}
+
+async function addOptionGroup() {
+  if (!optionsProduct.value) return
+  if (!newGroupName.value.trim()) {
+    toast.add({ title: 'กรุณากรอกชื่อตัวเลือก', color: 'error' })
+    return
+  }
+  try {
+    await $fetch(`/api/products/${optionsProduct.value.id}/options`, {
+      method: 'POST',
+      body: { name: newGroupName.value, isRequired: newGroupRequired.value }
+    })
+    optionGroupRows.value = await $fetch<OptionGroupRow[]>(`/api/products/${optionsProduct.value.id}/options`)
+    newGroupName.value = ''
+    newGroupRequired.value = false
+    toast.add({ title: 'เพิ่มตัวเลือกสำเร็จ', color: 'success' })
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'เพิ่มไม่สำเร็จ', color: 'error' })
+  }
+}
+
+async function toggleGroupRequired(group: OptionGroupRow) {
+  const isRequired = !group.isRequired
+  try {
+    await $fetch(`/api/option-groups/${group.id}`, { method: 'PATCH', body: { isRequired } })
+    group.isRequired = isRequired
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'ทำรายการไม่สำเร็จ', color: 'error' })
+  }
+}
+
+async function deleteOptionGroup(group: OptionGroupRow) {
+  try {
+    await $fetch(`/api/option-groups/${group.id}`, { method: 'DELETE' })
+    optionGroupRows.value = optionGroupRows.value.filter(g => g.id !== group.id)
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'ลบไม่สำเร็จ', color: 'error' })
+  }
+}
+
+async function addChoice(group: OptionGroupRow) {
+  const name = (newChoiceName[group.id] ?? '').trim()
+  if (!name) {
+    toast.add({ title: 'กรุณากรอกชื่อตัวเลือกย่อย', color: 'error' })
+    return
+  }
+  try {
+    const choice = await $fetch<OptionChoice>(`/api/option-groups/${group.id}/choices`, {
+      method: 'POST',
+      body: { name, priceDelta: newChoiceDelta[group.id] ?? 0 }
+    })
+    group.choices.push(choice)
+    newChoiceName[group.id] = ''
+    newChoiceDelta[group.id] = 0
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'เพิ่มไม่สำเร็จ', color: 'error' })
+  }
+}
+
+async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
+  try {
+    await $fetch(`/api/option-groups/${group.id}/choices/${choice.id}`, { method: 'DELETE' })
+    group.choices = group.choices.filter(c => c.id !== choice.id)
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage ?? 'ลบไม่สำเร็จ', color: 'error' })
+  }
+}
 </script>
 
 <template>
@@ -322,6 +422,14 @@ async function submitNewIngredient() {
               variant="ghost"
               title="สูตร/วัตถุดิบ"
               @click="openRecipeModal(product)"
+            />
+            <UButton
+              icon="i-lucide-list-checks"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              title="ตัวเลือกสินค้า"
+              @click="openOptionsModal(product)"
             />
             <UButton
               icon="i-lucide-pencil"
@@ -534,6 +642,123 @@ async function submitNewIngredient() {
             บันทึก
           </UButton>
         </form>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="optionsModalOpen"
+      :title="optionsProduct ? `ตัวเลือกสินค้า: ${optionsProduct.name}` : 'ตัวเลือกสินค้า'"
+    >
+      <template #body>
+        <div class="flex flex-col gap-5">
+          <div
+            v-for="group in optionGroupRows"
+            :key="group.id"
+            class="flex flex-col gap-2 rounded-lg border border-default p-3"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <p class="font-medium truncate min-w-0">
+                {{ group.name }}
+              </p>
+              <div class="flex items-center gap-3 shrink-0">
+                <UCheckbox
+                  :model-value="group.isRequired"
+                  label="บังคับเลือก"
+                  @update:model-value="toggleGroupRequired(group)"
+                />
+                <UButton
+                  icon="i-lucide-trash-2"
+                  size="xs"
+                  color="error"
+                  variant="ghost"
+                  @click="deleteOptionGroup(group)"
+                />
+              </div>
+            </div>
+
+            <div class="flex flex-col divide-y divide-default">
+              <div
+                v-for="choice in group.choices"
+                :key="choice.id"
+                class="flex items-center justify-between py-1.5 gap-2"
+              >
+                <span class="text-sm">{{ choice.name }}</span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class="text-sm text-muted">{{ choice.priceDelta >= 0 ? '+' : '' }}{{ choice.priceDelta.toFixed(2) }} บาท</span>
+                  <UButton
+                    icon="i-lucide-x"
+                    size="xs"
+                    color="error"
+                    variant="ghost"
+                    @click="deleteChoice(group, choice)"
+                  />
+                </div>
+              </div>
+              <p
+                v-if="!group.choices.length"
+                class="text-muted text-sm py-1.5"
+              >
+                ยังไม่มีตัวเลือกย่อย
+              </p>
+            </div>
+
+            <div class="flex items-end gap-2">
+              <UFormField
+                label="ตัวเลือกย่อย"
+                class="flex-1"
+              >
+                <UInput
+                  v-model="newChoiceName[group.id]"
+                  placeholder="เช่น หวานน้อย"
+                  class="w-full"
+                />
+              </UFormField>
+              <UFormField label="ราคาเพิ่ม (บาท)">
+                <UInputNumber
+                  v-model="newChoiceDelta[group.id]"
+                  :step="1"
+                  class="w-28"
+                />
+              </UFormField>
+              <UButton
+                icon="i-lucide-plus"
+                @click="addChoice(group)"
+              >
+                เพิ่ม
+              </UButton>
+            </div>
+          </div>
+
+          <p
+            v-if="!optionGroupRows.length"
+            class="text-muted text-sm"
+          >
+            สินค้านี้ยังไม่มีตัวเลือก (เช่น ความหวาน, ไซส์, ไข่มุก)
+          </p>
+
+          <div class="flex items-end gap-2 border-t border-default pt-4">
+            <UFormField
+              label="เพิ่มกลุ่มตัวเลือกใหม่"
+              class="flex-1"
+            >
+              <UInput
+                v-model="newGroupName"
+                placeholder="เช่น ความหวาน, ไซส์"
+                class="w-full"
+              />
+            </UFormField>
+            <UCheckbox
+              v-model="newGroupRequired"
+              label="บังคับเลือก"
+            />
+            <UButton
+              icon="i-lucide-plus"
+              @click="addOptionGroup"
+            >
+              เพิ่ม
+            </UButton>
+          </div>
+        </div>
       </template>
     </UModal>
   </UContainer>

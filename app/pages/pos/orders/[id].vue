@@ -1,8 +1,11 @@
 <script setup lang="ts">
+interface OrderItemOption { groupId: number, choiceId: number, name: string, priceDelta: number }
+
 interface OrderItem {
   id: number
   quantity: number
   price: number
+  options: OrderItemOption[] | null
   product: { name: string }
 }
 
@@ -65,6 +68,12 @@ const methodLabels: Record<Payment['method'], string> = {
             <div>
               <p class="font-medium">
                 {{ item.product.name }}
+              </p>
+              <p
+                v-if="item.options?.length"
+                class="text-sm text-muted"
+              >
+                {{ item.options.map(o => o.name).join(', ') }}
               </p>
               <p class="text-sm text-muted">
                 {{ item.price.toFixed(2) }} บาท x {{ item.quantity }}

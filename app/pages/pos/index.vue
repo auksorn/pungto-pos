@@ -5,19 +5,39 @@ interface Category {
   sortOrder: number
 }
 
+interface OptionChoice {
+  id: number
+  optionGroupId: number
+  name: string
+  priceDelta: number
+}
+
+interface OptionGroup {
+  id: number
+  productId: number
+  name: string
+  isRequired: boolean
+  choices: OptionChoice[]
+}
+
 interface Product {
   id: number
   name: string
   price: number
   categoryId: number | null
   isActive: boolean
+  optionGroups: OptionGroup[]
 }
 
+interface CartLineOption { groupId: number, choiceId: number, name: string, priceDelta: number }
+
 interface CartLine {
+  key: string
   productId: number
   name: string
   price: number
   quantity: number
+  options: CartLineOption[]
 }
 
 const toast = useToast()
@@ -35,13 +55,28 @@ const filteredProducts = computed(() => {
 
 const cart = ref<CartLine[]>([])
 
-function addToCart(product: Product) {
-  const line = cart.value.find(l => l.productId === product.id)
-  if (line) {
-    line.quantity++
-  } else {
-    cart.value.push({ productId: product.id, name: product.name, price: product.price, quantity: 1 })
+function lineKey(productId: number, options: CartLineOption[]) {
+  const sorted = [...options].sort((a, b) => a.groupId - b.groupId).map(o => `${o.groupId}:${o.choiceId}`)
+  return `${productId}|${sorted.join(',')}`
+}
+
+function addLine(product: Product, options: CartLineOption[]) {
+  const key = lineKey(product.id, options)
+  const existing = cart.value.find(l => l.key === key)
+  if (existing) {
+    existing.quantity++
+    return
   }
+  const price = product.price + options.reduce((sum, o) => sum + o.priceDelta, 0)
+  cart.value.push({ key, productId: product.id, name: product.name, price, quantity: 1, options })
+}
+
+function addToCart(product: Product) {
+  if (product.optionGroups.length) {
+    openOptionModal(product)
+    return
+  }
+  addLine(product, [])
 }
 
 function incLine(line: CartLine) {
@@ -51,15 +86,52 @@ function incLine(line: CartLine) {
 function decLine(line: CartLine) {
   line.quantity--
   if (line.quantity <= 0) {
-    cart.value = cart.value.filter(l => l.productId !== line.productId)
+    cart.value = cart.value.filter(l => l.key !== line.key)
   }
 }
 
 function removeLine(line: CartLine) {
-  cart.value = cart.value.filter(l => l.productId !== line.productId)
+  cart.value = cart.value.filter(l => l.key !== line.key)
 }
 
 const total = computed(() => cart.value.reduce((sum, l) => sum + l.price * l.quantity, 0))
+
+// ---------- Option selection (sweetness, size, pearls, ...) ----------
+
+const optionModalOpen = ref(false)
+const optionModalProduct = ref<Product | null>(null)
+const optionSelections = reactive<Record<number, number | undefined>>({})
+
+function openOptionModal(product: Product) {
+  optionModalProduct.value = product
+  // Stale entries from a previously opened product are harmless — only the
+  // current product's own group ids are ever read.
+  for (const group of product.optionGroups) {
+    optionSelections[group.id] = group.choices[0]?.id
+  }
+  optionModalOpen.value = true
+}
+
+const canConfirmOptions = computed(() => {
+  const product = optionModalProduct.value
+  if (!product) return false
+  return product.optionGroups.every(group => !group.isRequired || optionSelections[group.id] != null)
+})
+
+function confirmOptionModal() {
+  const product = optionModalProduct.value
+  if (!product || !canConfirmOptions.value) return
+  const options: CartLineOption[] = []
+  for (const group of product.optionGroups) {
+    const choiceId = optionSelections[group.id]
+    if (choiceId == null) continue
+    const choice = group.choices.find(c => c.id === choiceId)
+    if (!choice) continue
+    options.push({ groupId: group.id, choiceId: choice.id, name: choice.name, priceDelta: choice.priceDelta })
+  }
+  addLine(product, options)
+  optionModalOpen.value = false
+}
 
 // ---------- Checkout ----------
 
@@ -89,7 +161,11 @@ async function confirmCheckout() {
     const res = await $fetch<{ order: { id: number }, change: number }>('/api/orders/checkout', {
       method: 'POST',
       body: {
-        items: cart.value.map(l => ({ productId: l.productId, quantity: l.quantity })),
+        items: cart.value.map(l => ({
+          productId: l.productId,
+          quantity: l.quantity,
+          options: l.options.map(o => ({ groupId: o.groupId, choiceId: o.choiceId }))
+        })),
         method: method.value,
         amountReceived: method.value === 'cash' ? amountReceived.value : undefined
       }
@@ -163,12 +239,18 @@ async function confirmCheckout() {
         <div class="flex flex-col divide-y divide-default max-h-[50vh] overflow-y-auto">
           <div
             v-for="line in cart"
-            :key="line.productId"
+            :key="line.key"
             class="flex items-center justify-between py-2 gap-2"
           >
             <div class="min-w-0">
               <p class="truncate text-sm font-medium">
                 {{ line.name }}
+              </p>
+              <p
+                v-if="line.options.length"
+                class="text-xs text-muted truncate"
+              >
+                {{ line.options.map(o => o.name).join(', ') }}
               </p>
               <p class="text-xs text-muted">
                 {{ line.price.toFixed(2) }} บาท x {{ line.quantity }}
@@ -268,6 +350,41 @@ async function confirmCheckout() {
             @click="confirmCheckout"
           >
             ยืนยันรับชำระเงิน
+          </UButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="optionModalOpen"
+      :title="optionModalProduct ? optionModalProduct.name : 'เลือกตัวเลือก'"
+    >
+      <template #body>
+        <div class="flex flex-col gap-5">
+          <div
+            v-for="group in optionModalProduct?.optionGroups ?? []"
+            :key="group.id"
+          >
+            <p class="text-sm font-medium mb-2">
+              {{ group.name }}
+              <span
+                v-if="group.isRequired"
+                class="text-error"
+              >*</span>
+            </p>
+            <URadioGroup
+              v-model="optionSelections[group.id]"
+              :items="group.choices.map(c => ({ label: `${c.name}${c.priceDelta ? ` (${c.priceDelta > 0 ? '+' : ''}${c.priceDelta.toFixed(2)} บาท)` : ''}`, value: c.id }))"
+            />
+          </div>
+
+          <UButton
+            block
+            size="lg"
+            :disabled="!canConfirmOptions"
+            @click="confirmOptionModal"
+          >
+            เพิ่มลงตะกร้า
           </UButton>
         </div>
       </template>

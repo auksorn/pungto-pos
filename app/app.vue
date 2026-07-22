@@ -70,7 +70,9 @@ async function logout() {
             { label: 'ขายหน้าร้าน', to: '/pos', icon: 'i-lucide-shopping-cart' },
             { label: 'สต๊อก', to: '/stock', icon: 'i-lucide-package' },
             ...(['owner', 'manager'].includes(user.role) ? [{ label: 'จัดการเมนู', to: '/menu', icon: 'i-lucide-coffee' }] : []),
-            ...(user.role === 'owner' ? [{ label: 'จัดการสาขา', to: '/branches', icon: 'i-lucide-store' }] : [])
+            ...(['owner', 'manager'].includes(user.role) ? [{ label: 'รายงาน', to: '/reports', icon: 'i-lucide-bar-chart-3' }] : []),
+            ...(user.role === 'owner' ? [{ label: 'จัดการสาขา', to: '/branches', icon: 'i-lucide-store' }] : []),
+            ...(user.role === 'owner' ? [{ label: 'จัดการพนักงาน', to: '/employees', icon: 'i-lucide-users' }] : [])
           ]"
         />
       </template>

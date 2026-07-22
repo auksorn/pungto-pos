@@ -32,17 +32,18 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] ระบบ login พนักงาน (username/password, bcrypt hash)
 - [x] Session (sealed cookie ผ่าน `nuxt-auth-utils`) + global middleware ป้องกัน route
 - [x] แบ่ง role: owner, manager, staff (เก็บใน schema + session)
-- [ ] CRUD จัดการพนักงาน (เพิ่ม/ลบ/แก้ไข, กำหนดสาขาที่สังกัด) — ตอนนี้มีแค่ seed script สร้าง owner คนแรก
+- [x] CRUD จัดการพนักงาน (เพิ่ม/แก้ไข, กำหนดสาขาที่สังกัดและตำแหน่ง — owner เท่านั้น, ไม่มีลบจริงเพราะพนักงานถูกอ้างอิงในประวัติออเดอร์/สต๊อก ใช้ปิดใช้งานแทน เหมือนสาขา/สินค้า; ห้ามปิดใช้งานบัญชีตัวเอง)
 - [ ] Clock-in/Clock-out (ถ้าต้องการ track เวลาเข้างาน) — optional
 
 > Login: [app/pages/login.vue](app/pages/login.vue) · API: [server/api/auth/](server/api/auth/) · Middleware: [app/middleware/auth.global.ts](app/middleware/auth.global.ts)
+> จัดการพนักงาน: [app/pages/employees/index.vue](app/pages/employees/index.vue) (owner เท่านั้น) · API: [server/api/employees/](server/api/employees/)
 > Seed a first owner account: `npm run db:seed` (username: `owner` / password: `changeme123` — เปลี่ยนหลัง login ครั้งแรก)
 
 ## 3. จัดการสาขา (Multi-branch)
 - [x] CRUD สาขา (เพิ่ม/แก้ไข/ปิดสาขา — owner เท่านั้น, ปิดสาขาใช้ soft-delete เหมือนสินค้า)
 - [x] Switch branch สำหรับ owner (เลือกสาขาใดสาขาหนึ่ง หรือ "ทุกสาขา") — manager/staff ยังคงผูกกับสาขาที่สังกัดตายตัว (`employees.branch_id`), ยังไม่มีการ "เลือกสาขาตอน login" แยกต่างหาก (ใช้ switcher ในหัวเว็บแทน)
 - [x] แยกข้อมูล order, stock ตามสาขา (ผ่าน `branch_id` + effective branch จาก session) — report ยังไม่มี (ดูข้อ 8)
-- [ ] Dashboard เปรียบเทียบยอดขายระหว่างสาขา (สำหรับแอดมิน) — โหมด "ทุกสาขา" ตอนนี้แค่แสดงสต๊อกรวม ยังไม่มีสรุปยอดขาย
+- [x] Dashboard เปรียบเทียบยอดขายระหว่างสาขา (สำหรับแอดมิน) — ตาราง "เปรียบเทียบยอดขายระหว่างสาขา" ในหน้ารายงาน (แสดงเมื่อมีมากกว่า 1 สาขาในผลลัพธ์ เฉพาะโหมด "ทุกสาขา" ของ owner)
 
 > หน้าจัดการ: [app/pages/branches/index.vue](app/pages/branches/index.vue) (owner เท่านั้น) · API: [server/api/branches/](server/api/branches/)
 > Branch switcher: dropdown ในหัวเว็บ (เฉพาะ owner) · API: `POST /api/auth/branch` (`branchId: number | null`, null = ทุกสาขา) · การขาย/รับสต๊อกต้องเลือกสาขาใดสาขาหนึ่งก่อนเสมอ (โหมดทุกสาขาดูได้อย่างเดียว)
@@ -50,13 +51,13 @@ Stack: Nuxt 3 (fullstack) + SQLite
 ## 4. จัดการเมนู/สินค้า
 - [x] CRUD หมวดหมู่สินค้า (บล็อกการลบถ้ายังมีสินค้าอยู่ในหมวดหมู่)
 - [x] CRUD สินค้า (ชื่อ, ราคา, รูป, หมวดหมู่, เปิด/ปิดขาย — ปิดขายใช้ soft-delete เพื่อไม่กระทบประวัติออเดอร์ในอนาคต)
-- [ ] ตั้งค่าตัวเลือกสินค้า (ความหวาน, ท็อปปิ้ง/ไข่มุก, ไซส์, ร้อน/เย็น) พร้อมราคาเพิ่ม — schema มีแล้ว (`option_groups`/`option_choices`) แต่ยังไม่มี UI
+- [x] ตั้งค่าตัวเลือกสินค้า (ความหวาน, ท็อปปิ้ง/ไข่มุก, ไซส์, ร้อน/เย็น) พร้อมราคาเพิ่ม — ปุ่ม "ตัวเลือกสินค้า" ในหน้าจัดการเมนู เพิ่ม/ลบกลุ่มตัวเลือกและตัวเลือกย่อยได้ (แต่ละกลุ่มเลือกได้ 1 ค่า/กลุ่ม ไม่ใช่ multi-select); เชื่อมกับหน้า POS แล้ว (เลือกตัวเลือกตอนเพิ่มลงตะกร้า, ราคาคำนวณจาก DB ฝั่ง server เสมอกันการปลอมราคา) และแสดงในใบเสร็จ
 - [x] เชื่อมสินค้ากับสูตร/วัตถุดิบที่ใช้ (สำหรับตัดสต๊อกอัตโนมัติ) — ปุ่ม "สูตร/วัตถุดิบ" ในหน้าจัดการเมนู เพิ่ม/ลบ/แก้ปริมาณวัตถุดิบต่อสินค้าได้ (อ้างอิง ingredient กลาง ใช้ได้ทุกสาขา)
 
-> หน้าจัดการ: [app/pages/menu/index.vue](app/pages/menu/index.vue) (จำกัดสิทธิ์ owner/manager) · API: [server/api/categories/](server/api/categories/), [server/api/products/](server/api/products/), [server/api/products/[id]/ingredients/](server/api/products/%5Bid%5D/ingredients/), [server/api/ingredients/](server/api/ingredients/)
+> หน้าจัดการ: [app/pages/menu/index.vue](app/pages/menu/index.vue) (จำกัดสิทธิ์ owner/manager) · API: [server/api/categories/](server/api/categories/), [server/api/products/](server/api/products/), [server/api/products/[id]/ingredients/](server/api/products/%5Bid%5D/ingredients/), [server/api/ingredients/](server/api/ingredients/), [server/api/products/[id]/options/](server/api/products/%5Bid%5D/options/) (option groups), [server/api/option-groups/](server/api/option-groups/) (แก้ไข/ลบกลุ่ม + จัดการตัวเลือกย่อย)
 
 ## 5. ระบบรับออเดอร์ (Order Taking)
-- [x] หน้าจอ POS เลือกสินค้า + จำนวน (ยังไม่รวมตัวเลือกสินค้า เช่น ความหวาน/ไซส์)
+- [x] หน้าจอ POS เลือกสินค้า + จำนวน (สินค้าที่มีตัวเลือกจะเปิด modal ให้เลือกก่อนใส่ตะกร้า — บรรทัดตะกร้าแยกกันตามตัวเลือกที่ต่างกัน)
 - [x] ตะกร้าออเดอร์ (เพิ่ม/ลบ/แก้ไขจำนวน)
 - [ ] รองรับหมายเลขโต๊ะ/ชื่อลูกค้า/เลขคิว (ถ้าต้องการ)
 - [x] ~~บันทึกออเดอร์เป็นสถานะ "รอชำระ" (open order)~~ — ตัดออกแล้ว ร้านนี้ชำระเงินทันทีหลังสั่งเสมอ ไม่มีแนวคิดออเดอร์ค้างชำระ (ดูข้อ 6)
@@ -85,11 +86,13 @@ Stack: Nuxt 3 (fullstack) + SQLite
 > เพิ่มวัตถุดิบใหม่จากหน้าสต๊อกได้โดยพิมพ์ชื่อ+หน่วยตรงๆ (ระบบจะ reuse ingredient เดิมถ้าชื่อซ้ำและหน่วยตรงกัน หรือสร้างใหม่ถ้ายังไม่มี)
 
 ## 8. รายงาน/Dashboard
-- [ ] ยอดขายรายวัน/รายเดือน ต่อสาขา
-- [ ] สินค้าขายดี
-- [ ] สรุปยอดตามช่องทางชำระเงิน
-- [ ] มูลค่าสต๊อกคงเหลือ / รายการใกล้หมด
-- [ ] สรุปยอดขายตามพนักงาน (optional)
+- [x] ยอดขายรายวัน/รายเดือน ต่อสาขา — เลือกช่วงวันที่ (พรีเซ็ต/กำหนดเอง) + สลับกลุ่มรายวัน/รายเดือน สโคปตามสาขาที่เลือก (หรือทุกสาขา)
+- [x] สินค้าขายดี — จัดอันดับตามจำนวนที่ขายได้ (top 10)
+- [x] สรุปยอดตามช่องทางชำระเงิน
+- [ ] มูลค่าสต๊อกคงเหลือ / รายการใกล้หมด — รายการใกล้หมดมีแล้ว แต่ "มูลค่า" (บาท) ยังทำไม่ได้เพราะ schema วัตถุดิบไม่มีต้นทุนต่อหน่วย (แสดงจำนวนรายการแทน)
+- [x] สรุปยอดขายตามพนักงาน (optional)
+
+> หน้ารายงาน: [app/pages/reports/index.vue](app/pages/reports/index.vue) (จำกัดสิทธิ์ owner/manager) · API: [server/api/reports/summary.get.ts](server/api/reports/summary.get.ts) (`GET ?from&to&groupBy=day|month`)
 
 ## 9. Non-functional / Deployment
 - [ ] Responsive UI สำหรับ tablet (หน้าจอขายหน้าร้าน)
