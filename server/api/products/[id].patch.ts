@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { db } from '../../db'
-import { products } from '../../db/schema'
+import { categories, products } from '../../db/schema'
 
 export default defineEventHandler(async (event) => {
   await requireRole(event, ['owner', 'manager'])
@@ -24,7 +24,18 @@ export default defineEventHandler(async (event) => {
     }
     updates.price = body.price
   }
-  if (body?.categoryId !== undefined) updates.categoryId = body.categoryId
+  if (body?.categoryId !== undefined) {
+    if (body.categoryId != null) {
+      if (!Number.isInteger(body.categoryId)) {
+        throw createError({ statusCode: 400, statusMessage: 'invalid categoryId' })
+      }
+      const [category] = await db.select({ id: categories.id }).from(categories).where(eq(categories.id, body.categoryId)).limit(1)
+      if (!category) {
+        throw createError({ statusCode: 404, statusMessage: 'ไม่พบหมวดหมู่' })
+      }
+    }
+    updates.categoryId = body.categoryId
+  }
   if (body?.imageUrl !== undefined) updates.imageUrl = body.imageUrl
   if (body?.isActive !== undefined) updates.isActive = body.isActive
 

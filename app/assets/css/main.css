@@ -1,8 +1,14 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+@media print {
+  @page {
+    margin: 8mm;
+  }
+}
+
 @theme static {
-  --font-sans: 'Public Sans', sans-serif;
+  --font-sans: 'Sarabun', sans-serif;
 
   /* Clay - dusty terracotta pastel, used as the primary color */
   --color-clay-50: #FAF3EF;

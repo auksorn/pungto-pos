@@ -1,6 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '../../db'
-import { orders, orderItems, payments, products, productIngredients, stockItems, stockTransactions, optionGroups } from '../../db/schema'
+import { orders, orderItems, payments, products, productIngredients, stockItems, stockTransactions, optionGroups, employees } from '../../db/schema'
+
+const CODE_RE = /^\d{4,8}$/
 
 interface CartItem { productId: number, quantity: number, options?: Array<{ groupId: number, choiceId: number }> }
 interface ResolvedOption { groupId: number, choiceId: number, name: string, priceDelta: number }
@@ -11,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const { user } = await requireUserSession(event)
   const branchId = requireEffectiveBranchId(user)
 
-  const body = await readBody<{ items?: CartItem[], method?: 'cash' | 'transfer' | 'qr', amountReceived?: number }>(event)
+  const body = await readBody<{ items?: CartItem[], method?: 'cash' | 'transfer' | 'qr', amountReceived?: number, note?: string, discountAmount?: number, receivingCode?: string }>(event)
   const items = body?.items ?? []
   if (!items.length) {
     throw createError({ statusCode: 400, statusMessage: 'กรุณาเลือกสินค้าอย่างน้อย 1 รายการ' })
@@ -25,6 +27,23 @@ export default defineEventHandler(async (event) => {
   const method = body?.method
   if (!method || !['cash', 'transfer', 'qr'].includes(method)) {
     throw createError({ statusCode: 400, statusMessage: 'กรุณาเลือกช่องทางชำระเงิน' })
+  }
+
+  // Who actually rang this order up — identified by their own PIN rather than
+  // whichever account the shared POS terminal is logged in as. Falls back to
+  // the session's own account when no code is given (kept optional so shops
+  // that haven't set up staff PINs yet aren't blocked).
+  let employeeId = user.id
+  if (body?.receivingCode) {
+    const receivingCode = body.receivingCode.trim()
+    if (!CODE_RE.test(receivingCode)) {
+      throw createError({ statusCode: 400, statusMessage: 'รหัสพนักงานผู้รับออเดอร์ไม่ถูกต้อง' })
+    }
+    const [receiving] = await db.select({ id: employees.id, isActive: employees.isActive }).from(employees).where(eq(employees.code, receivingCode)).limit(1)
+    if (!receiving || !receiving.isActive) {
+      throw createError({ statusCode: 400, statusMessage: 'ไม่พบรหัสพนักงานผู้รับออเดอร์นี้ หรือบัญชีถูกปิดใช้งาน' })
+    }
+    employeeId = receiving.id
   }
 
   const foundProducts = await db.select().from(products).where(inArray(products.id, items.map(i => i.productId)))
@@ -70,7 +89,18 @@ export default defineEventHandler(async (event) => {
     return { item, product, unitPrice, resolvedOptions }
   })
 
-  const total = resolvedItems.reduce((sum, r) => sum + r.unitPrice * r.item.quantity, 0)
+  const subtotal = resolvedItems.reduce((sum, r) => sum + r.unitPrice * r.item.quantity, 0)
+
+  const discountAmount = body?.discountAmount ?? 0
+  if (typeof discountAmount !== 'number' || !Number.isFinite(discountAmount) || discountAmount < 0) {
+    throw createError({ statusCode: 400, statusMessage: 'ส่วนลดไม่ถูกต้อง' })
+  }
+  if (discountAmount > subtotal) {
+    throw createError({ statusCode: 400, statusMessage: 'ส่วนลดมากกว่ายอดรวม' })
+  }
+  const total = subtotal - discountAmount
+
+  const note = body?.note?.trim() || null
 
   // Sum how much of each ingredient this cart consumes, across all items sharing it
   const recipeRows = await db.select().from(productIngredients).where(inArray(productIngredients.productId, items.map(i => i.productId)))
@@ -94,8 +124,10 @@ export default defineEventHandler(async (event) => {
   const createdId = db.transaction((tx) => {
     const [order] = tx.insert(orders).values({
       branchId,
-      employeeId: user.id,
-      status: 'paid'
+      employeeId,
+      status: 'paid',
+      note,
+      discountAmount
     }).returning().all()
 
     tx.insert(orderItems).values(resolvedItems.map(({ item, product, unitPrice, resolvedOptions }) => ({
@@ -121,7 +153,7 @@ export default defineEventHandler(async (event) => {
       tx.insert(stockTransactions).values({
         stockItemId: stockItem.id,
         branchId,
-        employeeId: user.id,
+        employeeId,
         type: 'out',
         quantity,
         refOrderId: order.id

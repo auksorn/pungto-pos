@@ -28,6 +28,7 @@ interface Ingredient {
   id: number
   name: string
   unit: string
+  costPerUnit: number
 }
 
 interface RecipeRow {
@@ -111,11 +112,13 @@ async function deleteCategory(category: Category) {
 
 const productModalOpen = ref(false)
 const editingProduct = ref<Product | null>(null)
-const productForm = reactive<{ name: string, price: number, categoryId: number | null, imageUrl: string }>({
+const productSubmitting = ref(false)
+const productImageFile = ref<File | null>(null)
+const productForm = reactive<{ name: string, price: number, categoryId: number | null, imageUrl: string | null }>({
   name: '',
   price: 0,
   categoryId: null,
-  imageUrl: ''
+  imageUrl: null
 })
 
 function openNewProduct() {
@@ -123,7 +126,8 @@ function openNewProduct() {
   productForm.name = ''
   productForm.price = 0
   productForm.categoryId = categories.value?.[0]?.id ?? null
-  productForm.imageUrl = ''
+  productForm.imageUrl = null
+  productImageFile.value = null
   productModalOpen.value = true
 }
 
@@ -132,18 +136,26 @@ function openEditProduct(product: Product) {
   productForm.name = product.name
   productForm.price = product.price
   productForm.categoryId = product.categoryId
-  productForm.imageUrl = product.imageUrl ?? ''
+  productForm.imageUrl = product.imageUrl
+  productImageFile.value = null
   productModalOpen.value = true
 }
 
+function clearProductImage() {
+  productForm.imageUrl = null
+  productImageFile.value = null
+}
+
 async function submitProduct() {
-  const body = {
-    name: productForm.name,
-    price: productForm.price,
-    categoryId: productForm.categoryId,
-    imageUrl: productForm.imageUrl || null
-  }
+  productSubmitting.value = true
   try {
+    const imageUrl = productImageFile.value ? await uploadImage(productImageFile.value) : productForm.imageUrl
+    const body = {
+      name: productForm.name,
+      price: productForm.price,
+      categoryId: productForm.categoryId,
+      imageUrl
+    }
     if (editingProduct.value) {
       await $fetch(`/api/products/${editingProduct.value.id}`, { method: 'PATCH', body })
     } else {
@@ -154,6 +166,8 @@ async function submitProduct() {
     toast.add({ title: 'บันทึกสินค้าสำเร็จ', color: 'success' })
   } catch (err: any) {
     toast.add({ title: err?.data?.statusMessage ?? 'บันทึกไม่สำเร็จ', color: 'error' })
+  } finally {
+    productSubmitting.value = false
   }
 }
 
@@ -218,11 +232,12 @@ async function deleteRecipeRow(row: RecipeRow) {
 // ---------- Quick-create a new ingredient (from the recipe modal) ----------
 
 const newIngredientModalOpen = ref(false)
-const newIngredientForm = reactive({ name: '', unit: '' })
+const newIngredientForm = reactive({ name: '', unit: '', costPerUnit: 0 })
 
 function openNewIngredient() {
   newIngredientForm.name = ''
   newIngredientForm.unit = ''
+  newIngredientForm.costPerUnit = 0
   newIngredientModalOpen.value = true
 }
 
@@ -334,7 +349,7 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
           </h2>
           <UButton
             icon="i-lucide-plus"
-            size="sm"
+            size="lg"
             @click="openNewCategory"
           >
             เพิ่มหมวดหมู่
@@ -346,22 +361,24 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
         <div
           v-for="category in categories"
           :key="category.id"
-          class="flex items-center justify-between py-2"
+          class="flex items-center justify-between py-3"
         >
           <span>{{ category.name }}</span>
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-2">
             <UButton
               icon="i-lucide-pencil"
-              size="xs"
+              size="lg"
               color="neutral"
               variant="ghost"
+              class="size-10"
               @click="openEditCategory(category)"
             />
             <UButton
               icon="i-lucide-trash-2"
-              size="xs"
+              size="lg"
               color="error"
               variant="ghost"
+              class="size-10"
               @click="deleteCategory(category)"
             />
           </div>
@@ -383,7 +400,7 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
           </h2>
           <UButton
             icon="i-lucide-plus"
-            size="sm"
+            size="lg"
             @click="openNewProduct"
           >
             เพิ่มสินค้า
@@ -395,63 +412,85 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
         <div
           v-for="product in products"
           :key="product.id"
-          class="flex items-center justify-between py-2 gap-2"
+          class="flex flex-wrap items-center justify-between py-3 gap-3"
         >
-          <div class="min-w-0">
-            <p
-              class="truncate"
-              :class="{ 'text-muted line-through': !product.isActive }"
+          <div class="flex items-center gap-3 min-w-0">
+            <img
+              v-if="product.imageUrl"
+              :src="product.imageUrl"
+              class="size-12 rounded-lg object-cover shrink-0"
             >
-              {{ product.name }}
-            </p>
-            <p class="text-sm text-muted">
-              {{ product.category?.name ?? 'ไม่มีหมวดหมู่' }} · {{ product.price.toFixed(2) }} บาท
-            </p>
+            <div
+              v-else
+              class="size-12 rounded-lg bg-elevated shrink-0 flex items-center justify-center"
+            >
+              <UIcon
+                name="i-lucide-image"
+                class="size-5 text-dimmed"
+              />
+            </div>
+            <div class="min-w-0">
+              <p
+                class="truncate"
+                :class="{ 'text-muted line-through': !product.isActive }"
+              >
+                {{ product.name }}
+              </p>
+              <p class="text-sm text-muted mt-0.5">
+                {{ product.category?.name ?? 'ไม่มีหมวดหมู่' }} · {{ product.price.toFixed(2) }} บาท
+              </p>
+            </div>
           </div>
-          <div class="flex items-center gap-1 shrink-0">
+          <div class="flex items-center gap-1.5 shrink-0">
             <UBadge
               :color="product.isActive ? 'success' : 'neutral'"
               variant="subtle"
+              class="mr-1"
             >
               {{ product.isActive ? 'ขายอยู่' : 'ปิดขาย' }}
             </UBadge>
             <UButton
               icon="i-lucide-flask-conical"
-              size="xs"
+              size="lg"
               color="neutral"
               variant="ghost"
+              class="size-10"
               title="สูตร/วัตถุดิบ"
               @click="openRecipeModal(product)"
             />
             <UButton
               icon="i-lucide-list-checks"
-              size="xs"
+              size="lg"
               color="neutral"
               variant="ghost"
+              class="size-10"
               title="ตัวเลือกสินค้า"
               @click="openOptionsModal(product)"
             />
             <UButton
               icon="i-lucide-pencil"
-              size="xs"
+              size="lg"
               color="neutral"
               variant="ghost"
+              class="size-10"
               @click="openEditProduct(product)"
             />
             <UButton
               v-if="product.isActive"
               icon="i-lucide-eye-off"
-              size="xs"
+              size="lg"
               color="error"
               variant="ghost"
+              class="size-10"
               @click="setProductActive(product, false)"
             />
             <UButton
               v-else
               icon="i-lucide-eye"
-              size="xs"
+              size="lg"
               color="success"
               variant="ghost"
+              class="size-10"
               @click="setProductActive(product, true)"
             />
           </div>
@@ -477,18 +516,21 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
           <UFormField label="ชื่อหมวดหมู่">
             <UInput
               v-model="categoryForm.name"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UFormField label="ลำดับการแสดง">
             <UInputNumber
               v-model="categoryForm.sortOrder"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UButton
             type="submit"
             block
+            size="lg"
           >
             บันทึก
           </UButton>
@@ -508,12 +550,14 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
           <UFormField label="ชื่อสินค้า">
             <UInput
               v-model="productForm.name"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UFormField label="ราคา (บาท)">
             <UInputNumber
               v-model="productForm.price"
+              size="lg"
               :min="0"
               :step="1"
               class="w-full"
@@ -524,19 +568,42 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
               v-model="productForm.categoryId"
               :items="categoryOptions"
               placeholder="เลือกหมวดหมู่"
+              size="lg"
               class="w-full"
             />
           </UFormField>
-          <UFormField label="ลิงก์รูปภาพ (ถ้ามี)">
-            <UInput
-              v-model="productForm.imageUrl"
-              placeholder="https://..."
-              class="w-full"
-            />
+          <UFormField label="รูปภาพสินค้า (ไม่บังคับ, ระบบจะบีบอัดให้อัตโนมัติ)">
+            <div class="flex items-center gap-3">
+              <img
+                v-if="productForm.imageUrl && !productImageFile"
+                :src="productForm.imageUrl"
+                class="size-16 rounded-lg object-cover shrink-0"
+              >
+              <UFileUpload
+                v-model="productImageFile"
+                accept="image/*"
+                icon="i-lucide-image"
+                label="แตะเพื่อเลือกรูป หรือวางไฟล์ที่นี่"
+                size="lg"
+                class="flex-1 min-w-0"
+              />
+              <UButton
+                v-if="productForm.imageUrl || productImageFile"
+                icon="i-lucide-x"
+                size="lg"
+                color="neutral"
+                variant="ghost"
+                class="size-10 shrink-0"
+                title="ลบรูปภาพ"
+                @click="clearProductImage"
+              />
+            </div>
           </UFormField>
           <UButton
             type="submit"
             block
+            size="lg"
+            :loading="productSubmitting"
           >
             บันทึก
           </UButton>
@@ -554,16 +621,17 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
             <div
               v-for="row in recipeRows"
               :key="row.id"
-              class="flex items-center justify-between py-2 gap-2"
+              class="flex items-center justify-between py-2.5 gap-2"
             >
               <span>{{ row.ingredient.name }}</span>
               <div class="flex items-center gap-2 shrink-0">
                 <span class="text-sm text-muted">{{ row.quantity }} {{ row.ingredient.unit }}</span>
                 <UButton
                   icon="i-lucide-trash-2"
-                  size="xs"
+                  size="lg"
                   color="error"
                   variant="ghost"
+                  class="size-10"
                   @click="deleteRecipeRow(row)"
                 />
               </div>
@@ -576,27 +644,30 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
             </p>
           </div>
 
-          <div class="flex items-end gap-2">
+          <div class="flex flex-wrap items-end gap-2">
             <UFormField
               label="วัตถุดิบ"
-              class="flex-1"
+              class="flex-1 min-w-40"
             >
               <USelect
                 v-model="newRecipeIngredientId"
                 :items="ingredientOptions"
                 placeholder="เลือกวัตถุดิบ"
+                size="lg"
                 class="w-full"
               />
             </UFormField>
             <UFormField label="ปริมาณที่ใช้">
               <UInputNumber
                 v-model="newRecipeQuantity"
+                size="lg"
                 :min="0"
                 class="w-28"
               />
             </UFormField>
             <UButton
               icon="i-lucide-plus"
+              size="lg"
               @click="addRecipeRow"
             >
               เพิ่ม
@@ -604,7 +675,7 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
           </div>
           <UButton
             variant="link"
-            size="sm"
+            size="lg"
             class="self-start p-0"
             @click="openNewIngredient"
           >
@@ -626,18 +697,30 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
           <UFormField label="ชื่อวัตถุดิบ">
             <UInput
               v-model="newIngredientForm.name"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UFormField label="หน่วยนับ (เช่น กรัม, มล., ถุง)">
             <UInput
               v-model="newIngredientForm.unit"
+              size="lg"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField label="ต้นทุนต่อหน่วย (บาท, ถ้าทราบ)">
+            <UInputNumber
+              v-model="newIngredientForm.costPerUnit"
+              size="lg"
+              :min="0"
+              :step="0.5"
               class="w-full"
             />
           </UFormField>
           <UButton
             type="submit"
             block
+            size="lg"
           >
             บันทึก
           </UButton>
@@ -654,9 +737,9 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
           <div
             v-for="group in optionGroupRows"
             :key="group.id"
-            class="flex flex-col gap-2 rounded-lg border border-default p-3"
+            class="flex flex-col gap-3 rounded-lg border border-default p-4"
           >
-            <div class="flex items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
               <p class="font-medium truncate min-w-0">
                 {{ group.name }}
               </p>
@@ -664,13 +747,15 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
                 <UCheckbox
                   :model-value="group.isRequired"
                   label="บังคับเลือก"
+                  size="lg"
                   @update:model-value="toggleGroupRequired(group)"
                 />
                 <UButton
                   icon="i-lucide-trash-2"
-                  size="xs"
+                  size="lg"
                   color="error"
                   variant="ghost"
+                  class="size-10"
                   @click="deleteOptionGroup(group)"
                 />
               </div>
@@ -680,16 +765,17 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
               <div
                 v-for="choice in group.choices"
                 :key="choice.id"
-                class="flex items-center justify-between py-1.5 gap-2"
+                class="flex items-center justify-between py-2 gap-2"
               >
-                <span class="text-sm">{{ choice.name }}</span>
+                <span>{{ choice.name }}</span>
                 <div class="flex items-center gap-2 shrink-0">
                   <span class="text-sm text-muted">{{ choice.priceDelta >= 0 ? '+' : '' }}{{ choice.priceDelta.toFixed(2) }} บาท</span>
                   <UButton
                     icon="i-lucide-x"
-                    size="xs"
+                    size="lg"
                     color="error"
                     variant="ghost"
+                    class="size-9"
                     @click="deleteChoice(group, choice)"
                   />
                 </div>
@@ -702,14 +788,15 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
               </p>
             </div>
 
-            <div class="flex items-end gap-2">
+            <div class="flex flex-wrap items-end gap-2">
               <UFormField
                 label="ตัวเลือกย่อย"
-                class="flex-1"
+                class="flex-1 min-w-32"
               >
                 <UInput
                   v-model="newChoiceName[group.id]"
                   placeholder="เช่น หวานน้อย"
+                  size="lg"
                   class="w-full"
                 />
               </UFormField>
@@ -717,11 +804,13 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
                 <UInputNumber
                   v-model="newChoiceDelta[group.id]"
                   :step="1"
+                  size="lg"
                   class="w-28"
                 />
               </UFormField>
               <UButton
                 icon="i-lucide-plus"
+                size="lg"
                 @click="addChoice(group)"
               >
                 เพิ่ม
@@ -736,23 +825,26 @@ async function deleteChoice(group: OptionGroupRow, choice: OptionChoice) {
             สินค้านี้ยังไม่มีตัวเลือก (เช่น ความหวาน, ไซส์, ไข่มุก)
           </p>
 
-          <div class="flex items-end gap-2 border-t border-default pt-4">
+          <div class="flex flex-wrap items-end gap-2 border-t border-default pt-4">
             <UFormField
               label="เพิ่มกลุ่มตัวเลือกใหม่"
-              class="flex-1"
+              class="flex-1 min-w-40"
             >
               <UInput
                 v-model="newGroupName"
                 placeholder="เช่น ความหวาน, ไซส์"
+                size="lg"
                 class="w-full"
               />
             </UFormField>
             <UCheckbox
               v-model="newGroupRequired"
               label="บังคับเลือก"
+              size="lg"
             />
             <UButton
               icon="i-lucide-plus"
+              size="lg"
               @click="addOptionGroup"
             >
               เพิ่ม

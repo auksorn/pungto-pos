@@ -30,14 +30,18 @@ async function onSubmit() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center px-4">
-    <UCard class="w-full max-w-sm">
+    <UCard class="w-full max-w-md">
       <template #header>
-        <h1 class="text-xl font-bold text-center">
-          บังโต POS
-        </h1>
-        <p class="text-sm text-muted text-center">
-          เข้าสู่ระบบสำหรับพนักงาน
-        </p>
+        <div class="flex flex-col items-center gap-2">
+          <img
+            src="~/assets/images/main-logo.jpg"
+            alt="บังโต POS"
+            class="h-20 w-20 rounded-lg object-cover"
+          >
+          <p class="text-sm text-muted text-center">
+            เข้าสู่ระบบสำหรับพนักงาน
+          </p>
+        </div>
       </template>
 
       <form
@@ -48,6 +52,7 @@ async function onSubmit() {
           <UInput
             v-model="username"
             autofocus
+            size="xl"
             placeholder="username"
             class="w-full"
           />
@@ -57,6 +62,7 @@ async function onSubmit() {
           <UInput
             v-model="password"
             type="password"
+            size="xl"
             placeholder="••••••••"
             class="w-full"
           />
@@ -72,6 +78,7 @@ async function onSubmit() {
         <UButton
           type="submit"
           block
+          size="xl"
           :loading="loading"
         >
           เข้าสู่ระบบ

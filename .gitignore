@@ -26,3 +26,5 @@ logs
 # SQLite database
 /data/*.db
 /data/*.db-*
+/data/backups/
+/data/uploads/

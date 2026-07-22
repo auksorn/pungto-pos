@@ -9,7 +9,7 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] ตั้งค่า SQLite database file + migration tool (drizzle-kit, `data/pos.db`)
 - [x] ตั้งค่า UI framework (Nuxt UI / Tailwind v4, มากับ template)
 - [x] ตั้งค่า ESLint/Prettier, tsconfig (มากับ template)
-- [ ] โครงสร้าง server API (`server/api/**`) และ layer สำหรับ multi-branch (มีแค่ `/api/health` ตอนนี้)
+- [x] โครงสร้าง server API (`server/api/**`) และ layer สำหรับ multi-branch — ครบทุกโดเมน (auth, branches, employees, categories, products, option-groups, ingredients, stock-items, orders, reports, time-entries) ใช้ `requireRole`/`getEffectiveBranchId`/`requireEffectiveBranchId` ร่วมกันเป็น layer กลาง
 
 ## 1. Data Model (Schema Design)
 - [x] `branches` (สาขา) - id, name, address, phone, is_active
@@ -33,11 +33,12 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] Session (sealed cookie ผ่าน `nuxt-auth-utils`) + global middleware ป้องกัน route
 - [x] แบ่ง role: owner, manager, staff (เก็บใน schema + session)
 - [x] CRUD จัดการพนักงาน (เพิ่ม/แก้ไข, กำหนดสาขาที่สังกัดและตำแหน่ง — owner เท่านั้น, ไม่มีลบจริงเพราะพนักงานถูกอ้างอิงในประวัติออเดอร์/สต๊อก ใช้ปิดใช้งานแทน เหมือนสาขา/สินค้า; ห้ามปิดใช้งานบัญชีตัวเอง)
-- [ ] Clock-in/Clock-out (ถ้าต้องการ track เวลาเข้างาน) — optional
+- [x] Clock-in/Clock-out (track เวลาเข้างานแต่ละคน) — พนักงานแต่ละคนมี "รหัสเข้างาน" (PIN 4-8 หลัก, ตั้ง/แก้ไขได้ในหน้าจัดการพนักงาน) กดปุ่ม "เข้า-ออกงาน" ที่หัวเว็บ (ทุก role เห็น ไม่ต้อง login ด้วยบัญชีของตัวเองก่อน — ใช้ได้แม้เครื่อง POS ล็อกอินค้างไว้ด้วยบัญชีอื่น) แล้วกรอกรหัสของตัวเอง ระบบจะเข้า/ออกงานให้อัตโนมัติตามรหัสที่กรอก, หน้า "เวลาเข้างาน" สรุปประวัติทั้งหมด (owner/manager, กรองตามช่วงวันที่)
 
 > Login: [app/pages/login.vue](app/pages/login.vue) · API: [server/api/auth/](server/api/auth/) · Middleware: [app/middleware/auth.global.ts](app/middleware/auth.global.ts)
-> จัดการพนักงาน: [app/pages/employees/index.vue](app/pages/employees/index.vue) (owner เท่านั้น) · API: [server/api/employees/](server/api/employees/)
-> Seed a first owner account: `npm run db:seed` (username: `owner` / password: `changeme123` — เปลี่ยนหลัง login ครั้งแรก)
+> จัดการพนักงาน: [app/pages/employees/index.vue](app/pages/employees/index.vue) (owner เท่านั้น, ตั้งรหัสเข้างานที่นี่) · API: [server/api/employees/](server/api/employees/)
+> เวลาเข้างาน: ปุ่ม "เข้า-ออกงาน" ใน [app/app.vue](app/app.vue) (กรอกรหัส PIN, ทุก role) · หน้า [app/pages/time-entries/index.vue](app/pages/time-entries/index.vue) (owner/manager) · API: [server/api/time-entries/](server/api/time-entries/) (`POST /kiosk` รับรหัส PIN ใช้ได้ทุก role ที่ login ไว้, `GET /` ดูประวัติจำกัด owner/manager)
+> Seed ข้อมูลตัวอย่าง: `npm run db:seed` สร้างบัญชี `owner`/`manager1`/`staff1` (รหัสผ่านเริ่มต้นทั้งหมด `changeme123`, รหัสเข้างาน `1111`/`2222`/`3333` ตามลำดับ — เปลี่ยนหลัง login ครั้งแรก) พร้อมสาขา/เมนู/สต๊อกตัวอย่าง
 
 ## 3. จัดการสาขา (Multi-branch)
 - [x] CRUD สาขา (เพิ่ม/แก้ไข/ปิดสาขา — owner เท่านั้น, ปิดสาขาใช้ soft-delete เหมือนสินค้า)
@@ -59,17 +60,18 @@ Stack: Nuxt 3 (fullstack) + SQLite
 ## 5. ระบบรับออเดอร์ (Order Taking)
 - [x] หน้าจอ POS เลือกสินค้า + จำนวน (สินค้าที่มีตัวเลือกจะเปิด modal ให้เลือกก่อนใส่ตะกร้า — บรรทัดตะกร้าแยกกันตามตัวเลือกที่ต่างกัน)
 - [x] ตะกร้าออเดอร์ (เพิ่ม/ลบ/แก้ไขจำนวน)
-- [ ] รองรับหมายเลขโต๊ะ/ชื่อลูกค้า/เลขคิว (ถ้าต้องการ)
+- [x] รองรับหมายเลขโต๊ะ/ชื่อลูกค้า/เลขคิว (ถ้าต้องการ) — ช่องข้อความอิสระ "โต๊ะ/ชื่อลูกค้า/คิว" ในตะกร้า (คอลัมน์ `orders.note`, ไม่บังคับกรอก) แสดงในใบเสร็จและใบสั่งเตรียมเครื่องดื่ม
 - [x] ~~บันทึกออเดอร์เป็นสถานะ "รอชำระ" (open order)~~ — ตัดออกแล้ว ร้านนี้ชำระเงินทันทีหลังสั่งเสมอ ไม่มีแนวคิดออเดอร์ค้างชำระ (ดูข้อ 6)
 - [x] ~~แก้ไข/ยกเลิกออเดอร์ก่อนชำระเงิน~~ — ตัดออกแล้ว ด้วยเหตุผลเดียวกัน
-- [ ] พิมพ์/แสดงใบสั่งสำหรับเตรียมเครื่องดื่ม (kitchen ticket) — optional
+- [x] พิมพ์/แสดงใบสั่งสำหรับเตรียมเครื่องดื่ม (kitchen ticket) — optional — หน้า `/pos/orders/:id/ticket` แสดงชื่อสินค้า+ตัวเลือก+จำนวนตัวใหญ่ ไม่มีราคา พร้อมปุ่มพิมพ์ เข้าถึงได้จากปุ่มในหน้าใบเสร็จ
 
 ## 6. ระบบคิดเงิน (Checkout/Billing)
 - [x] flow เดียว: ตะกร้า → "ชำระเงิน" เปิด modal ทันที → ยืนยัน → สร้างออเดอร์และชำระเงินในคำขอเดียว (atomic transaction ไม่มีออเดอร์ค้างถ้าชำระไม่สำเร็จ) → หน้าใบเสร็จ
-- [ ] คำนวณยอดรวม, ส่วนลด (ถ้ามี), VAT (ถ้ามี) — ยังไม่มีส่วนลด/VAT (ไม่ระบุว่าจำเป็น)
+- [x] คำนวณยอดรวม, ส่วนลด (ถ้ามี) — กรอกส่วนลดเป็นจำนวนเงิน (บาท) ตอนชำระเงินได้ (ไม่เกินยอดรวม), แสดงแยกยอดรวม/ส่วนลด/ยอดชำระในใบเสร็จ
+- [ ] VAT — **ยังไม่ทำ โดยตั้งใจ**: ต้องรู้ก่อนว่าร้านจดทะเบียน VAT หรือไม่ และราคาที่ตั้งไว้ตอนนี้รวม VAT แล้วหรือยัง (จะกระทบทั้งการคำนวณและใบเสร็จที่ถูกต้องตามกฎหมาย) — ใส่ผิดจะเป็นปัญหาบัญชี/ภาษีจริง ต้องถามเจ้าของร้านก่อนทำ
 - [x] เลือกช่องทางชำระเงิน (เงินสด/โอน/QR พร้อมเพย์)
 - [x] คำนวณเงินทอน (กรณีเงินสด)
-- [ ] พิมพ์/แสดงใบเสร็จ (receipt) — มีหน้าใบเสร็จสรุปแล้ว แต่ยังไม่มีรูปแบบสำหรับพิมพ์
+- [x] พิมพ์/แสดงใบเสร็จ (receipt) — ปุ่ม "พิมพ์ใบเสร็จ" (`window.print()`) + CSS สำหรับพิมพ์ (ซ่อนเมนู/ปุ่มที่ไม่เกี่ยวข้อง, ตั้ง page margin)
 - [x] ปิดออเดอร์ → ตัดสต๊อกอัตโนมัติตาม recipe — ตัดในธุรกรรมเดียวกับ checkout แบบ best-effort: ถ้าสาขานั้นไม่มีวัตถุดิบชิ้นนั้นในสต๊อก จะข้ามการตัด (ไม่บล็อกการขาย เพราะร้านนี้ต้องชำระเงินสำเร็จเสมอ)
 
 > POS (ตะกร้า+ชำระเงินทันที): [app/pages/pos/index.vue](app/pages/pos/index.vue) · หน้าใบเสร็จ: [app/pages/pos/orders/[id].vue](app/pages/pos/orders/%5Bid%5D.vue) · API: [server/api/orders/](server/api/orders/) (`POST /checkout` = สร้าง+จ่ายในคำขอเดียว — endpoint เดียวที่สร้างออเดอร์ได้)
@@ -80,7 +82,7 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] ตัดสต๊อกอัตโนมัติเมื่อขายสินค้า (ตาม recipe mapping) — ดูข้อ 6
 - [x] ปรับสต๊อกด้วยมือ (stock adjustment) พร้อมเหตุผล (ต้องระบุเหตุผลสำหรับ เบิกออก/ปรับยอด)
 - [x] แจ้งเตือนสต๊อกใกล้หมด (min threshold) — badge "สต๊อกใกล้หมด" ในหน้าจัดการสต๊อก
-- [x] ประวัติการเคลื่อนไหวสต๊อก (stock transaction log) — API พร้อมใช้ (`GET /api/stock-items/:id/transactions`), ยังไม่มี UI แสดงประวัติในหน้าเว็บ
+- [x] ประวัติการเคลื่อนไหวสต๊อก (stock transaction log) — ปุ่มไอคอนนาฬิกาในหน้าจัดการสต๊อก เปิด modal แสดงประวัติ (ประเภท, จำนวน +/-, ผู้ทำรายการ, เหตุผล, ลิงก์ออเดอร์ถ้าตัดจากการขาย) เรียงล่าสุดก่อน
 
 > หน้าจัดการ: [app/pages/stock/index.vue](app/pages/stock/index.vue) (ทุกคนทำรายการเข้า/ออกได้ แก้ไข/ลบวัตถุดิบจำกัด owner/manager) · API: [server/api/stock-items/](server/api/stock-items/), [server/api/ingredients/](server/api/ingredients/)
 > เพิ่มวัตถุดิบใหม่จากหน้าสต๊อกได้โดยพิมพ์ชื่อ+หน่วยตรงๆ (ระบบจะ reuse ingredient เดิมถ้าชื่อซ้ำและหน่วยตรงกัน หรือสร้างใหม่ถ้ายังไม่มี)
@@ -89,17 +91,17 @@ Stack: Nuxt 3 (fullstack) + SQLite
 - [x] ยอดขายรายวัน/รายเดือน ต่อสาขา — เลือกช่วงวันที่ (พรีเซ็ต/กำหนดเอง) + สลับกลุ่มรายวัน/รายเดือน สโคปตามสาขาที่เลือก (หรือทุกสาขา)
 - [x] สินค้าขายดี — จัดอันดับตามจำนวนที่ขายได้ (top 10)
 - [x] สรุปยอดตามช่องทางชำระเงิน
-- [ ] มูลค่าสต๊อกคงเหลือ / รายการใกล้หมด — รายการใกล้หมดมีแล้ว แต่ "มูลค่า" (บาท) ยังทำไม่ได้เพราะ schema วัตถุดิบไม่มีต้นทุนต่อหน่วย (แสดงจำนวนรายการแทน)
+- [x] มูลค่าสต๊อกคงเหลือ / รายการใกล้หมด — เพิ่ม `ingredients.cost_per_unit` (แก้ไขได้จากหน้าจัดการสต๊อก/เมนู) การ์ด "มูลค่าสต๊อกคงเหลือ" ในหน้ารายงาน = Σ (quantity × cost_per_unit) ต่อสาขา (วัตถุดิบที่ยังไม่ตั้งต้นทุนจะไม่ถูกนับ มีข้อความเตือนจำนวนรายการที่ยังไม่ระบุ)
 - [x] สรุปยอดขายตามพนักงาน (optional)
 
 > หน้ารายงาน: [app/pages/reports/index.vue](app/pages/reports/index.vue) (จำกัดสิทธิ์ owner/manager) · API: [server/api/reports/summary.get.ts](server/api/reports/summary.get.ts) (`GET ?from&to&groupBy=day|month`)
 
 ## 9. Non-functional / Deployment
-- [ ] Responsive UI สำหรับ tablet (หน้าจอขายหน้าร้าน)
-- [ ] Backup ฐานข้อมูล SQLite (scheduled backup)
-- [ ] Error handling + validation (server-side)
-- [ ] Seed data สำหรับทดสอบ (เมนู, สาขา, พนักงานตัวอย่าง)
-- [ ] Deploy plan (เช่น host บน VPS/NAS, หรือ local server ที่ร้าน)
+- [x] Responsive UI สำหรับ tablet (หน้าจอขายหน้าร้าน) — หน้า POS ใช้ layout แบบสินค้า+ตะกร้าคู่กันตั้งแต่จอ ≥768px (md) แทนที่จะรอจอเดสก์ท็อป (เดิม ≥1024px), ปรับจำนวนคอลัมน์ตารางสินค้า/การ์ดสรุปในหน้ารายงานให้ไล่ระดับตามความกว้างจอถี่ขึ้น — **หมายเหตุ: ตรวจสอบด้วยการอ่านโค้ด/breakpoint เท่านั้น ไม่มีเครื่องมือ screenshot บนแท็บเล็ตจริงในสภาพแวดล้อมนี้ ควรลองเปิดจริงบนแท็บเล็ตก่อนใช้งานหน้าร้าน**
+- [x] Backup ฐานข้อมูล SQLite (scheduled backup) — `npm run db:backup` ใช้ better-sqlite3 online backup API คัดลอกไป `data/backups/` (เก็บ 14 ไฟล์ล่าสุด) ปลอดภัยรันตอนแอปทำงานอยู่; วิธีตั้งให้รันอัตโนมัติทุกวันดูใน [DEPLOYMENT.md](DEPLOYMENT.md)
+- [x] Error handling + validation (server-side) — ตรวจสอบทุก endpoint ใน `server/api/**` เพิ่มการตรวจสิทธิ์ตามสาขา (branch-scope) ที่ขาดใน stock-items PATCH/DELETE, เพิ่ม validation ที่ขาดสำหรับ ingredientId/minThreshold/categoryId/sortOrder, ลดข้อมูลที่ health check เปิดเผยแบบไม่ล็อกอิน
+- [x] Seed data สำหรับทดสอบ (เมนู, สาขา, พนักงานตัวอย่าง) — `npm run db:seed` เพิ่มสาขาที่ 2, บัญชี manager/staff ตัวอย่าง, สินค้า/หมวดหมู่/วัตถุดิบ (พร้อมต้นทุน)/สูตร/ตัวเลือกสินค้าตัวอย่าง — รันซ้ำได้ปลอดภัย (idempotent ตรวจจาก name/username เดิม)
+- [x] Deploy plan (เช่น host บน VPS/NAS, หรือ local server ที่ร้าน) — ดู [DEPLOYMENT.md](DEPLOYMENT.md): แนะนำ local server ที่ร้านเป็นหลัก (ไม่พึ่งเน็ต/ไม่มีค่าใช้จ่ายรายเดือน) พร้อมทางเลือก VPS/NAS
 
 ## Suggested build order (MVP first)
 1. Setup + schema + auth (พนักงาน login)

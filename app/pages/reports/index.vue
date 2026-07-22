@@ -26,7 +26,7 @@ interface Summary {
   byPaymentMethod: PaymentMethodStat[]
   topProducts: ProductStat[]
   byEmployee: EmployeeStat[]
-  stock: { totalItems: number, lowStockCount: number, lowStockItems: LowStockItem[] }
+  stock: { totalItems: number, totalValue: number, uncostedCount: number, lowStockCount: number, lowStockItems: LowStockItem[] }
 }
 
 const methodLabels = {
@@ -119,11 +119,11 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
         </h1>
       </template>
 
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2.5">
         <UButton
           v-for="p in presets"
           :key="p.key"
-          size="sm"
+          size="lg"
           :color="activePreset === p.key ? 'primary' : 'neutral'"
           :variant="activePreset === p.key ? 'solid' : 'soft'"
           @click="applyPreset(p.key)"
@@ -135,14 +135,14 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
           <UInput
             v-model="from"
             type="date"
-            size="sm"
+            size="lg"
             @change="onCustomDateChange"
           />
-          <span class="text-muted text-sm">ถึง</span>
+          <span class="text-muted">ถึง</span>
           <UInput
             v-model="to"
             type="date"
-            size="sm"
+            size="lg"
             @change="onCustomDateChange"
           />
         </div>
@@ -150,13 +150,13 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
         <USelect
           v-model="groupBy"
           :items="[{ label: 'รายวัน', value: 'day' }, { label: 'รายเดือน', value: 'month' }]"
-          class="w-32 ml-auto"
-          size="sm"
+          class="w-36 ml-auto"
+          size="lg"
         />
       </div>
     </UCard>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
       <UCard>
         <p class="text-sm text-muted">
           ยอดขายรวม
@@ -192,6 +192,20 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
       </UCard>
       <UCard>
         <p class="text-sm text-muted">
+          มูลค่าสต๊อกคงเหลือ
+        </p>
+        <p class="text-2xl font-bold">
+          {{ (data?.stock.totalValue ?? 0).toFixed(2) }}
+        </p>
+        <p class="text-xs text-muted">
+          บาท
+          <template v-if="(data?.stock.uncostedCount ?? 0) > 0">
+            · ยังไม่ระบุต้นทุน {{ data?.stock.uncostedCount }} รายการ
+          </template>
+        </p>
+      </UCard>
+      <UCard>
+        <p class="text-sm text-muted">
           วัตถุดิบใกล้หมด
         </p>
         <p
@@ -217,7 +231,7 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
         <div
           v-for="t in data?.trend"
           :key="t.period"
-          class="flex items-center gap-3 py-2"
+          class="flex items-center gap-3 py-3"
         >
           <div class="w-32 shrink-0 text-sm truncate">
             {{ formatPeriod(t.period) }}
@@ -255,7 +269,7 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
         <div
           v-for="b in data?.byBranch"
           :key="b.branchId"
-          class="flex items-center gap-3 py-2"
+          class="flex items-center gap-3 py-3"
         >
           <div class="w-32 shrink-0 text-sm truncate">
             {{ b.branchName }}
@@ -288,7 +302,7 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
           <div
             v-for="m in data?.byPaymentMethod"
             :key="m.method"
-            class="flex items-center gap-3 py-2"
+            class="flex items-center gap-3 py-3"
           >
             <div class="w-24 shrink-0 text-sm truncate">
               {{ methodLabels[m.method] }}
@@ -324,7 +338,7 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
           <div
             v-for="(p, i) in data?.topProducts"
             :key="p.productId"
-            class="flex items-center gap-3 py-2"
+            class="flex items-center gap-3 py-3"
           >
             <div class="w-6 shrink-0 text-sm text-muted">
               {{ i + 1 }}
@@ -363,7 +377,7 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
         <div
           v-for="e in data?.byEmployee"
           :key="e.employeeId"
-          class="flex items-center gap-3 py-2"
+          class="flex items-center gap-3 py-3"
         >
           <div class="w-32 shrink-0 text-sm truncate">
             {{ e.name }}
@@ -401,7 +415,7 @@ const maxEmployeeRevenue = computed(() => Math.max(0, ...(data.value?.byEmployee
         <div
           v-for="(item, i) in data?.stock.lowStockItems"
           :key="`${item.ingredientName}-${item.branchName}-${i}`"
-          class="flex items-center justify-between py-2 gap-2"
+          class="flex items-center justify-between py-3 gap-2"
         >
           <div class="min-w-0">
             <p class="font-medium truncate">

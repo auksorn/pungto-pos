@@ -80,7 +80,7 @@ async function setBranchActive(branch: Branch, isActive: boolean) {
           </h2>
           <UButton
             icon="i-lucide-plus"
-            size="sm"
+            size="lg"
             @click="openNewBranch"
           >
             เพิ่มสาขา
@@ -92,44 +92,48 @@ async function setBranchActive(branch: Branch, isActive: boolean) {
         <div
           v-for="branch in branches"
           :key="branch.id"
-          class="flex items-center justify-between py-2 gap-2"
+          class="flex flex-wrap items-center justify-between py-4 gap-3"
         >
           <div class="min-w-0">
             <p :class="{ 'text-muted line-through': !branch.isActive }">
               {{ branch.name }}
             </p>
-            <p class="text-sm text-muted">
+            <p class="text-sm text-muted mt-0.5">
               {{ branch.address || 'ไม่ระบุที่อยู่' }} <span v-if="branch.phone">· {{ branch.phone }}</span>
             </p>
           </div>
-          <div class="flex items-center gap-1 shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
             <UBadge
               :color="branch.isActive ? 'success' : 'neutral'"
               variant="subtle"
+              class="mr-1"
             >
               {{ branch.isActive ? 'เปิดใช้งาน' : 'ปิดสาขา' }}
             </UBadge>
             <UButton
               icon="i-lucide-pencil"
-              size="xs"
+              size="lg"
               color="neutral"
               variant="ghost"
+              class="size-10"
               @click="openEditBranch(branch)"
             />
             <UButton
               v-if="branch.isActive"
               icon="i-lucide-eye-off"
-              size="xs"
+              size="lg"
               color="error"
               variant="ghost"
+              class="size-10"
               @click="setBranchActive(branch, false)"
             />
             <UButton
               v-else
               icon="i-lucide-eye"
-              size="xs"
+              size="lg"
               color="success"
               variant="ghost"
+              class="size-10"
               @click="setBranchActive(branch, true)"
             />
           </div>
@@ -155,24 +159,28 @@ async function setBranchActive(branch: Branch, isActive: boolean) {
           <UFormField label="ชื่อสาขา">
             <UInput
               v-model="branchForm.name"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UFormField label="ที่อยู่">
             <UInput
               v-model="branchForm.address"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UFormField label="เบอร์โทร">
             <UInput
               v-model="branchForm.phone"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UButton
             type="submit"
             block
+            size="lg"
           >
             บันทึก
           </UButton>

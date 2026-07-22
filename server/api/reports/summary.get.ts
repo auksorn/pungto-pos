@@ -86,8 +86,9 @@ export default defineEventHandler(async (event) => {
     .groupBy(orders.employeeId, employees.name)
     .orderBy(desc(revenueExpr))
 
-  // Current stock snapshot (not date-ranged) — no per-unit cost is tracked in
-  // the ingredient catalog, so this reports item counts rather than a currency value.
+  // Current stock snapshot (not date-ranged). Ingredients with no cost set
+  // (costPerUnit = 0, the default for anything never priced) don't contribute
+  // to totalValue — there's no way to tell "free" apart from "unknown cost".
   const stockRows = await db.query.stockItems.findMany({
     where: branchId ? eq(stockItems.branchId, branchId) : undefined,
     with: { ingredient: true, branch: true }
@@ -96,6 +97,8 @@ export default defineEventHandler(async (event) => {
     .filter(r => r.quantity <= r.minThreshold)
     .sort((a, b) => (a.quantity - a.minThreshold) - (b.quantity - b.minThreshold))
     .map(r => ({ ingredientName: r.ingredient.name, unit: r.ingredient.unit, branchName: r.branch.name, quantity: r.quantity, minThreshold: r.minThreshold }))
+  const totalValue = stockRows.reduce((sum, r) => sum + r.quantity * r.ingredient.costPerUnit, 0)
+  const uncostedCount = stockRows.filter(r => r.ingredient.costPerUnit <= 0).length
 
   return {
     from,
@@ -113,6 +116,8 @@ export default defineEventHandler(async (event) => {
     byEmployee,
     stock: {
       totalItems: stockRows.length,
+      totalValue,
+      uncostedCount,
       lowStockCount: lowStockItems.length,
       lowStockItems
     }

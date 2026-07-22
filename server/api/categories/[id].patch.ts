@@ -17,7 +17,12 @@ export default defineEventHandler(async (event) => {
     if (!name) throw createError({ statusCode: 400, statusMessage: 'กรุณากรอกชื่อหมวดหมู่' })
     updates.name = name
   }
-  if (body?.sortOrder !== undefined) updates.sortOrder = body.sortOrder
+  if (body?.sortOrder !== undefined) {
+    if (typeof body.sortOrder !== 'number' || !Number.isFinite(body.sortOrder)) {
+      throw createError({ statusCode: 400, statusMessage: 'ลำดับการแสดงไม่ถูกต้อง' })
+    }
+    updates.sortOrder = body.sortOrder
+  }
 
   const [category] = await db.update(categories).set(updates).where(eq(categories.id, id)).returning()
   if (!category) {

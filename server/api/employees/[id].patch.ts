@@ -4,6 +4,7 @@ import { db } from '../../db'
 import { branches, employees } from '../../db/schema'
 
 const ROLES = ['owner', 'manager', 'staff'] as const
+const CODE_RE = /^\d{4,8}$/
 
 export default defineEventHandler(async (event) => {
   const { user } = await requireRole(event, ['owner'])
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'invalid id' })
   }
 
-  const body = await readBody<{ name?: string, username?: string, password?: string, role?: string, branchId?: number | null, isActive?: boolean }>(event)
+  const body = await readBody<{ name?: string, username?: string, password?: string, role?: string, branchId?: number | null, isActive?: boolean, code?: string | null }>(event)
 
   if (id === user.id && body?.isActive === false) {
     throw createError({ statusCode: 400, statusMessage: 'ไม่สามารถปิดใช้งานบัญชีของตัวเองได้' })
@@ -48,12 +49,22 @@ export default defineEventHandler(async (event) => {
   if (body?.branchId !== undefined) {
     if (body.branchId) {
       const [branch] = await db.select().from(branches).where(eq(branches.id, body.branchId)).limit(1)
-      if (!branch) throw createError({ statusCode: 400, statusMessage: 'ไม่พบสาขาที่เลือก' })
+      if (!branch || !branch.isActive) throw createError({ statusCode: 400, statusMessage: 'ไม่พบสาขาที่เลือก หรือสาขานี้ปิดใช้งานแล้ว' })
     }
     updates.branchId = body.branchId
   }
 
   if (body?.isActive !== undefined) updates.isActive = body.isActive
+
+  if (body?.code !== undefined) {
+    const code = body.code?.trim() || null
+    if (code) {
+      if (!CODE_RE.test(code)) throw createError({ statusCode: 400, statusMessage: 'รหัสพนักงานต้องเป็นตัวเลข 4-8 หลัก' })
+      const [existing] = await db.select().from(employees).where(and(eq(employees.code, code), ne(employees.id, id))).limit(1)
+      if (existing) throw createError({ statusCode: 409, statusMessage: 'มีรหัสพนักงานนี้อยู่แล้ว' })
+    }
+    updates.code = code
+  }
 
   const [employee] = await db.update(employees).set(updates).where(eq(employees.id, id)).returning()
   if (!employee) {

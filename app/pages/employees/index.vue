@@ -23,6 +23,7 @@ interface Employee {
   username: string
   role: Role
   isActive: boolean
+  code: string | null
   branch: Branch | null
 }
 
@@ -52,7 +53,8 @@ const form = reactive({
   username: '',
   password: '',
   role: 'staff' as Role,
-  branchId: null as number | null
+  branchId: null as number | null,
+  code: ''
 })
 const submitting = ref(false)
 
@@ -63,6 +65,7 @@ function openNewEmployee() {
   form.password = ''
   form.role = 'staff'
   form.branchId = null
+  form.code = ''
   modalOpen.value = true
 }
 
@@ -73,6 +76,7 @@ function openEditEmployee(employee: Employee) {
   form.password = ''
   form.role = employee.role
   form.branchId = employee.branchId
+  form.code = employee.code ?? ''
   modalOpen.value = true
 }
 
@@ -80,7 +84,7 @@ async function submitEmployee() {
   submitting.value = true
   try {
     if (editingEmployee.value) {
-      const body: Record<string, unknown> = { name: form.name, username: form.username, role: form.role, branchId: form.branchId }
+      const body: Record<string, unknown> = { name: form.name, username: form.username, role: form.role, branchId: form.branchId, code: form.code }
       if (form.password) body.password = form.password
       await $fetch(`/api/employees/${editingEmployee.value.id}`, { method: 'PATCH', body })
     } else {
@@ -116,7 +120,7 @@ async function setActive(employee: Employee, isActive: boolean) {
           </h1>
           <UButton
             icon="i-lucide-plus"
-            size="sm"
+            size="lg"
             @click="openNewEmployee"
           >
             เพิ่มพนักงาน
@@ -128,7 +132,7 @@ async function setActive(employee: Employee, isActive: boolean) {
         <div
           v-for="employee in employees"
           :key="employee.id"
-          class="flex items-center justify-between py-3 gap-2"
+          class="flex flex-wrap items-center justify-between py-4 gap-3"
         >
           <div class="min-w-0">
             <div class="flex items-center gap-2">
@@ -153,22 +157,27 @@ async function setActive(employee: Employee, isActive: boolean) {
             </div>
             <p class="text-sm text-muted">
               @{{ employee.username }} · {{ employee.branch?.name ?? 'ไม่มีสาขา' }}
+              <template v-if="employee.code">
+                · รหัสเข้างาน {{ employee.code }}
+              </template>
             </p>
           </div>
-          <div class="flex items-center gap-1 shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
             <UButton
               icon="i-lucide-pencil"
-              size="xs"
+              size="lg"
               color="neutral"
               variant="ghost"
+              class="size-10"
               @click="openEditEmployee(employee)"
             />
             <UButton
               v-if="employee.isActive"
               icon="i-lucide-eye-off"
-              size="xs"
+              size="lg"
               color="error"
               variant="ghost"
+              class="size-10"
               :disabled="employee.id === user?.id"
               :title="employee.id === user?.id ? 'ไม่สามารถปิดใช้งานบัญชีของตัวเองได้' : 'ปิดใช้งาน'"
               @click="setActive(employee, false)"
@@ -176,9 +185,10 @@ async function setActive(employee: Employee, isActive: boolean) {
             <UButton
               v-else
               icon="i-lucide-eye"
-              size="xs"
+              size="lg"
               color="success"
               variant="ghost"
+              class="size-10"
               title="เปิดใช้งาน"
               @click="setActive(employee, true)"
             />
@@ -205,12 +215,14 @@ async function setActive(employee: Employee, isActive: boolean) {
           <UFormField label="ชื่อพนักงาน">
             <UInput
               v-model="form.name"
+              size="lg"
               class="w-full"
             />
           </UFormField>
           <UFormField label="ชื่อผู้ใช้ (username)">
             <UInput
               v-model="form.username"
+              size="lg"
               class="w-full"
             />
           </UFormField>
@@ -218,6 +230,7 @@ async function setActive(employee: Employee, isActive: boolean) {
             <UInput
               v-model="form.password"
               type="password"
+              size="lg"
               class="w-full"
             />
           </UFormField>
@@ -225,6 +238,7 @@ async function setActive(employee: Employee, isActive: boolean) {
             <USelect
               v-model="form.role"
               :items="roleOptions"
+              size="lg"
               class="w-full"
             />
           </UFormField>
@@ -232,12 +246,27 @@ async function setActive(employee: Employee, isActive: boolean) {
             <USelect
               v-model="form.branchId"
               :items="branchOptions"
+              size="lg"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField
+            label="รหัสเข้างาน (PIN 4-8 หลัก สำหรับปุ่มเข้า-ออกงาน)"
+            hint="เว้นว่างได้"
+          >
+            <UInput
+              v-model="form.code"
+              inputmode="numeric"
+              maxlength="8"
+              size="lg"
+              placeholder="เช่น 1234"
               class="w-full"
             />
           </UFormField>
           <UButton
             type="submit"
             block
+            size="lg"
             :loading="submitting"
           >
             บันทึก

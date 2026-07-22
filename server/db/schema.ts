@@ -20,7 +20,20 @@ export const employees = sqliteTable('employees', {
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['owner', 'manager', 'staff'] }).notNull().default('staff'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  // Short numeric PIN staff punch into the shared clock-in kiosk with — separate
+  // from username/password so nobody has to log the shared terminal in/out of
+  // their own account just to clock in. Nullable: not every employee needs one.
+  code: text('code').unique(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+})
+
+// Clock-in/out: one open row (clockOut = null) per employee at a time
+export const timeEntries = sqliteTable('time_entries', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  employeeId: integer('employee_id').notNull().references(() => employees.id),
+  branchId: integer('branch_id').notNull().references(() => branches.id),
+  clockIn: integer('clock_in', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  clockOut: integer('clock_out', { mode: 'timestamp' })
 })
 
 // ---------- Menu ----------
@@ -64,6 +77,12 @@ export const ingredients = sqliteTable('ingredients', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),
   unit: text('unit').notNull(),
+  // Cost per unit (บาท), shared across branches like the rest of the catalog.
+  // Nullable/0 means "unknown" — reports fall back to showing item counts
+  // instead of a currency value for ingredients with no cost set.
+  costPerUnit: real('cost_per_unit').notNull().default(0),
+  // Uploaded photo, compressed server-side — see server/api/uploads/image.post.ts
+  imageUrl: text('image_url'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
 })
 
@@ -105,6 +124,10 @@ export const orders = sqliteTable('orders', {
   branchId: integer('branch_id').notNull().references(() => branches.id),
   employeeId: integer('employee_id').notNull().references(() => employees.id),
   status: text('status', { enum: ['open', 'paid', 'cancelled'] }).notNull().default('open'),
+  // Free-text: table number, customer name, or queue number — whatever this
+  // branch finds useful. Optional, shown on the receipt/kitchen ticket.
+  note: text('note'),
+  discountAmount: real('discount_amount').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
 })
 
@@ -135,7 +158,13 @@ export const branchesRelations = relations(branches, ({ many }) => ({
 
 export const employeesRelations = relations(employees, ({ one, many }) => ({
   branch: one(branches, { fields: [employees.branchId], references: [branches.id] }),
-  orders: many(orders)
+  orders: many(orders),
+  timeEntries: many(timeEntries)
+}))
+
+export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
+  employee: one(employees, { fields: [timeEntries.employeeId], references: [employees.id] }),
+  branch: one(branches, { fields: [timeEntries.branchId], references: [branches.id] })
 }))
 
 export const categoriesRelations = relations(categories, ({ many }) => ({

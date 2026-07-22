@@ -19,6 +19,8 @@ interface Payment {
 interface Order {
   id: number
   status: 'open' | 'paid' | 'cancelled'
+  note: string | null
+  discountAmount: number
   createdAt: string
   employee: { name: string }
   items: OrderItem[]
@@ -31,12 +33,21 @@ const change = route.query.change ? Number(route.query.change) : null
 
 const { data: order } = await useFetch<Order>(`/api/orders/${orderId}`)
 
-const total = computed(() => (order.value?.items ?? []).reduce((sum, item) => sum + item.price * item.quantity, 0))
+const subtotal = computed(() => (order.value?.items ?? []).reduce((sum, item) => sum + item.price * item.quantity, 0))
+const grandTotal = computed(() => subtotal.value - (order.value?.discountAmount ?? 0))
 
 const methodLabels: Record<Payment['method'], string> = {
   cash: 'เงินสด',
   transfer: 'โอนเงิน',
   qr: 'QR พร้อมเพย์'
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function printPage() {
+  window.print()
 }
 </script>
 
@@ -53,10 +64,18 @@ const methodLabels: Record<Payment['method'], string> = {
         <UBadge
           color="success"
           variant="subtle"
+          class="print:hidden"
         >
           ชำระแล้ว
         </UBadge>
       </div>
+
+      <p class="text-sm text-muted -mt-3">
+        {{ formatDateTime(order.createdAt) }} · พนักงาน {{ order.employee.name }}
+        <template v-if="order.note">
+          · {{ order.note }}
+        </template>
+      </p>
 
       <UCard>
         <div class="flex flex-col divide-y divide-default">
@@ -86,9 +105,25 @@ const methodLabels: Record<Payment['method'], string> = {
         </div>
 
         <template #footer>
-          <div class="flex items-center justify-between font-bold text-lg">
-            <span>รวมทั้งหมด</span>
-            <span>{{ total.toFixed(2) }} บาท</span>
+          <div class="flex flex-col gap-1">
+            <div
+              v-if="order.discountAmount"
+              class="flex items-center justify-between text-sm text-muted"
+            >
+              <span>ยอดรวม</span>
+              <span>{{ subtotal.toFixed(2) }} บาท</span>
+            </div>
+            <div
+              v-if="order.discountAmount"
+              class="flex items-center justify-between text-sm text-muted"
+            >
+              <span>ส่วนลด</span>
+              <span>-{{ order.discountAmount.toFixed(2) }} บาท</span>
+            </div>
+            <div class="flex items-center justify-between font-bold text-lg">
+              <span>รวมทั้งหมด</span>
+              <span>{{ grandTotal.toFixed(2) }} บาท</span>
+            </div>
           </div>
         </template>
       </UCard>
@@ -101,11 +136,35 @@ const methodLabels: Record<Payment['method'], string> = {
         :description="`ช่องทาง: ${methodLabels[order.payments[0]!.method]}${change ? ` · เงินทอน ${change.toFixed(2)} บาท` : ''}`"
       />
 
+      <div class="flex gap-2 print:hidden">
+        <UButton
+          to="/pos"
+          block
+          size="xl"
+          color="neutral"
+          variant="soft"
+        >
+          กลับไปหน้าขาย
+        </UButton>
+        <UButton
+          icon="i-lucide-printer"
+          block
+          size="xl"
+          @click="printPage"
+        >
+          พิมพ์ใบเสร็จ
+        </UButton>
+      </div>
       <UButton
-        to="/pos"
+        :to="`/pos/orders/${order.id}/ticket`"
+        icon="i-lucide-clipboard-list"
         block
+        size="xl"
+        color="neutral"
+        variant="ghost"
+        class="print:hidden"
       >
-        กลับไปหน้าขาย
+        ใบสั่งเตรียมเครื่องดื่ม
       </UButton>
     </div>
 

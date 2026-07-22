@@ -6,10 +6,18 @@ export default defineEventHandler(async (event) => {
   const { user } = await requireRole(event, ['owner', 'manager'])
   const branchId = requireEffectiveBranchId(user)
 
-  const body = await readBody<{ ingredientId?: number, name?: string, unit?: string, minThreshold?: number }>(event)
+  const body = await readBody<{ ingredientId?: number, name?: string, unit?: string, minThreshold?: number, costPerUnit?: number, imageUrl?: string | null }>(event)
 
   let ingredientId = body?.ingredientId
-  if (!ingredientId) {
+  if (ingredientId !== undefined && ingredientId !== null && !Number.isInteger(ingredientId)) {
+    throw createError({ statusCode: 400, statusMessage: 'invalid ingredientId' })
+  }
+  if (ingredientId) {
+    const [found] = await db.select({ id: ingredients.id }).from(ingredients).where(eq(ingredients.id, ingredientId)).limit(1)
+    if (!found) {
+      throw createError({ statusCode: 404, statusMessage: 'ไม่พบวัตถุดิบ' })
+    }
+  } else {
     // Free-typed name: reuse the existing ingredient with that name (shared
     // across branches), or create it if this is genuinely new.
     const name = body?.name?.trim()
@@ -20,6 +28,9 @@ export default defineEventHandler(async (event) => {
     if (!unit) {
       throw createError({ statusCode: 400, statusMessage: 'กรุณากรอกหน่วยนับ' })
     }
+    if (body?.costPerUnit !== undefined && (typeof body.costPerUnit !== 'number' || !Number.isFinite(body.costPerUnit) || body.costPerUnit < 0)) {
+      throw createError({ statusCode: 400, statusMessage: 'ต้นทุนต่อหน่วยไม่ถูกต้อง' })
+    }
 
     const [existing] = await db.select().from(ingredients).where(eq(ingredients.name, name)).limit(1)
     if (existing) {
@@ -28,9 +39,13 @@ export default defineEventHandler(async (event) => {
       }
       ingredientId = existing.id
     } else {
-      const [created] = await db.insert(ingredients).values({ name, unit }).returning()
+      const [created] = await db.insert(ingredients).values({ name, unit, costPerUnit: body?.costPerUnit ?? 0, imageUrl: body?.imageUrl ?? null }).returning()
       ingredientId = created.id
     }
+  }
+
+  if (body?.minThreshold !== undefined && (typeof body.minThreshold !== 'number' || !Number.isFinite(body.minThreshold) || body.minThreshold < 0)) {
+    throw createError({ statusCode: 400, statusMessage: 'สต๊อกขั้นต่ำไม่ถูกต้อง' })
   }
 
   const [alreadyStocked] = await db.select({ id: stockItems.id }).from(stockItems)
