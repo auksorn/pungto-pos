@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import fs from 'node:fs'
-import path from 'node:path'
+import { put } from '@vercel/blob'
 import sharp from 'sharp'
 
 // Raw upload size cap, checked before we even try to decode it — compression
@@ -32,9 +31,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'ไฟล์ที่อัปโหลดไม่ใช่รูปภาพที่รองรับ' })
   }
 
-  fs.mkdirSync(uploadsDir, { recursive: true })
   const filename = `${randomUUID()}.webp`
-  fs.writeFileSync(path.join(uploadsDir, filename), compressed)
+  const blob = await put(filename, compressed, {
+    access: 'public',
+    contentType: 'image/webp',
+    addRandomSuffix: false
+  })
 
-  return { url: `/uploads/${filename}` }
+  return { url: blob.url }
 })

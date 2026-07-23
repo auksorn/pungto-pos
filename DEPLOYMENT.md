@@ -1,37 +1,67 @@
 # Deploy Plan — บังโต POS
 
-> **สถานะปัจจุบัน:** ฐานข้อมูลเปลี่ยนจาก SQLite ไฟล์เดียวมาเป็น **Neon Postgres (cloud)** แล้ว —
-> ทุกการอ่าน/เขียน (รวมถึงตอนขายของหน้าร้าน) ต้องพึ่งอินเทอร์เน็ตเชื่อมต่อ Neon ได้เสมอ ข้อดีเรื่อง
-> "ขายของได้ต่อแม้เน็ตร้านหลุด" ในแผน local-server ด้านล่างนี้จึง **ไม่เป็นจริงอีกต่อไป** ในสถานะปัจจุบัน
-> — เนื้อหาด้านล่างยังมีประโยชน์สำหรับส่วน deploy ตัวแอป (Node process) แต่ส่วนฐานข้อมูลให้ใช้ Neon
-> connection string ใน `.env` แทนไฟล์ `data/pos.db`
+> **สถานะปัจจุบัน:** ฐานข้อมูลเป็น **Neon Postgres (cloud)** และรูปภาพสินค้า/วัตถุดิบเก็บบน
+> **Vercel Blob (cloud)** แล้วทั้งคู่ — แอปไม่มี state ที่ผูกกับดิสก์ของเครื่องรันเลย จึง deploy บน
+> Vercel (serverless) ได้ตรง ๆ
 
-ร้านนี้มีสาขาเดียวถึงไม่กี่สาขา และต้องใช้งานได้ต่อเนื่องแม้เน็ตร้านมีปัญหา ทางเลือกที่เหมาะสมที่สุดคือ
-**รันบนเครื่อง local ที่ร้าน** (PC/mini-PC ราคาไม่แพง หรือ NAS ที่รัน Node ได้) แทนการพึ่ง VPS/cloud
-ต่างประเทศ — ไม่มีค่าใช้จ่ายรายเดือน ไม่มี latency เวลาใช้งานจริง และขายของได้ต่อแม้เน็ตหลุด (เฉพาะ
-Wi-Fi ในร้านยังใช้ได้ระหว่างเครื่อง POS กับเครื่อง server)
+## Deploy บน Vercel
 
-> ถ้าในอนาคตมีหลายสาขาที่ต้องดูข้อมูลรวมศูนย์แบบเรียลไทม์ข้ามสาขา ค่อยพิจารณาย้ายไป VPS/cloud
-> (ดูหัวข้อ "ทางเลือก: VPS/Cloud" ด้านล่าง) — ไม่ใช่ความจำเป็นตอนนี้
+### 1. เตรียม Neon Postgres
+- สร้างโปรเจกต์ที่ [Neon Console](https://console.neon.tech) (ฟรีสำหรับใช้งานเริ่มต้น)
+- คัดลอก connection string 2 แบบจากหน้า Dashboard:
+  - **Pooled** (มี `-pooler` ในชื่อ host) → ใช้เป็น `DATABASE_URL`
+  - **Direct/Unpooled** → ใช้เป็น `DATABASE_URL_UNPOOLED` (สำหรับรัน migration เท่านั้น)
 
-## แนวทางหลัก: Local server ที่ร้าน
+### 2. เตรียม Vercel Blob
+- ในหน้า Vercel project → **Storage** tab → สร้าง Blob store
+- คัดลอก token มาใส่ `BLOB_READ_WRITE_TOKEN`
 
-### สิ่งที่ต้องมี
-- เครื่อง PC/mini-PC 1 เครื่องเปิดทิ้งไว้ตลอดเวลาเปิดร้าน (Windows/Linux ก็ได้) ต่อ Wi-Fi/LAN เดียวกับ
-  แท็บเล็ต/เครื่องคิดเงินที่ใช้หน้าจอ POS
-- Node.js 20+ ติดตั้งบนเครื่องนั้น
-- (ถ้าต้องการให้รันตลอดแม้เครื่อง restart) ตัว process manager — Windows ใช้ NSSM หรือ Task
-  Scheduler; Linux ใช้ `systemd` หรือ `pm2`
+### 3. รัน migration ครั้งแรก (จากเครื่อง local)
+```bash
+cp .env.example .env
+# ใส่ DATABASE_URL, DATABASE_URL_UNPOOLED, BLOB_READ_WRITE_TOKEN, NUXT_SESSION_PASSWORD ใน .env
+npm install
+npm run db:migrate
+npm run db:seed      # สร้างบัญชี owner แรก (username: owner / password: changeme123)
+```
+Migration รันตรงกับ Neon จากเครื่อง local ก่อน deploy — ไม่ต้องรันเป็นส่วนหนึ่งของ Vercel build
 
-### ขั้นตอน
+### 4. Deploy
+- Import repo นี้เข้า Vercel (New Project → เลือก repo จาก GitHub) — Vercel จะ detect Nuxt
+  framework preset ให้อัตโนมัติ ไม่ต้องตั้ง build command เอง
+- ตั้ง Environment Variables ในหน้า Project Settings → Environment Variables:
+  - `DATABASE_URL` (pooled connection string)
+  - `BLOB_READ_WRITE_TOKEN`
+  - `NUXT_SESSION_PASSWORD` (32+ ตัวอักษรสุ่ม — `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
+  - ไม่ต้องตั้ง `DATABASE_URL_UNPOOLED` บน Vercel (ใช้แค่ตอนรัน migrate จาก local/CI)
+- กด Deploy
+
+### อัปเดตเวอร์ชันใหม่
+```bash
+npm run db:migrate   # รันจาก local ก่อน push ทุกครั้งที่ schema เปลี่ยน
+git push             # Vercel deploy อัตโนมัติจาก push ไปสาขาที่ตั้งไว้ (ปกติคือ main/master)
+```
+
+### ข้อควรระวัง
+- ร้านต้องมีเน็ตใช้งานได้ตลอดเวลาเปิดร้าน (ทั้ง Neon และ Vercel เป็น cloud) — ถ้าเน็ตร้านหลุด
+  ระบบขายหน้าร้านจะใช้งานไม่ได้ทันที ร้านขายเครื่องดื่มที่กังวลเรื่องนี้ควรมีเน็ตสำรอง (4G/5G hotspot)
+- Neon มี point-in-time recovery และ database branching ในตัว (ดูที่ Neon Console)
+- Vercel Blob เก็บไฟล์แยกจาก deployment — ไม่หายตอน redeploy
+
+## ทางเลือกอื่น: Local server ที่ร้าน
+
+ถ้าไม่อยากพึ่งอินเทอร์เน็ตต่อเนื่อง (ร้านสาขาเดียว เน็ตไม่เสถียร) ยังรันบนเครื่อง local ที่ร้านได้
+เหมือนเดิม โดยฐานข้อมูลยังต้องต่อ Neon ผ่านเน็ต (ไม่มี local DB fallback แล้ว) — เหมาะกับกรณีที่มีเน็ต
+เสถียรพอสมควรแต่อยากลดค่าใช้จ่าย hosting เท่านั้น:
+
 ```bash
 git clone <repo> pung-to-pos
 cd pung-to-pos
 npm install
 cp .env.example .env
-# แก้ .env: ตั้ง NUXT_SESSION_PASSWORD ด้วยค่าสุ่ม (คำสั่งอยู่ใน .env.example)
+# ตั้งค่าเหมือนขั้นตอน Vercel ด้านบน (DATABASE_URL, BLOB_READ_WRITE_TOKEN, NUXT_SESSION_PASSWORD)
 npm run db:migrate
-npm run db:seed      # สร้างบัญชี owner แรก (username: owner / password: changeme123)
+npm run db:seed
 npm run build
 node .output/server/index.mjs
 ```
@@ -45,35 +75,6 @@ node .output/server/index.mjs
   หรือสร้าง Scheduled Task ที่ trigger ตอนเครื่องเปิด (`At startup`, run as SYSTEM หรือ user ที่ auto-login)
 - **Linux**: สร้าง systemd unit (`/etc/systemd/system/pos.service`) ที่ `ExecStart=/usr/bin/node
   /path/to/.output/server/index.mjs`, `Restart=always`, แล้ว `systemctl enable --now pos`
-
-### Backup
-ฐานข้อมูลอยู่บน Neon แล้ว — Neon มี point-in-time recovery และ database branching ในตัว (ดูที่
-[Neon Console](https://console.neon.tech) ของโปรเจกต์) ไม่ต้องเขียนสคริปต์ backup เองอีกต่อไป
-(สคริปต์ `db:backup` เดิมที่ใช้ better-sqlite3's online backup API ถูกลบออกแล้ว เพราะใช้ได้เฉพาะไฟล์
-SQLite เท่านั้น) ไฟล์ `data/uploads/` (รูปสินค้า/วัตถุดิบ) ยังเป็นไฟล์ในเครื่อง server อยู่ — ถ้าต้องการ
-backup ส่วนนี้ด้วยยังต้องจัดการเองตามเดิม
-
-### อัปเดตเวอร์ชันใหม่
-```bash
-git pull
-npm install
-npm run db:migrate   # รันทุกครั้งที่มี schema เปลี่ยน แม้ไม่มี migration ใหม่ก็ไม่มีผล
-npm run build
-# restart service/process
-```
-แนะนำให้ `npm run db:backup` ก่อน migrate ทุกครั้ง เผื่อ migration มีปัญหา
-
-## ทางเลือก: VPS/Cloud
-
-ถ้าต้องการเข้าถึงจากนอกร้าน (เช่น เจ้าของดูยอดขายจากบ้าน) หรือมีหลายสาขาที่อยากรวมศูนย์ข้อมูล:
-- Deploy เหมือนขั้นตอน local ข้างบนบน VPS เล็ก ๆ (เช่น 1 vCPU / 1GB RAM ก็เพียงพอ เพราะ SQLite +
-  Nuxt เบามาก)
-- ต้องมี reverse proxy (nginx/Caddy) + TLS (Let's Encrypt) ถ้าจะเปิดออกอินเทอร์เน็ตจริง — ห้ามเปิด
-  พอร์ต 3000 ตรงออก public โดยไม่มี HTTPS เพราะรหัสผ่าน login จะวิ่งแบบ plaintext
-  ได้
-- ฐานข้อมูลเป็น Neon Postgres (cloud) อยู่แล้ว รองรับหลายสาขาเขียนพร้อมกันได้โดยไม่ต้องแก้โค้ดเพิ่ม
-- ข้อเสีย: ถ้าเน็ตร้านหลุด ระบบขายหน้าร้านจะใช้งานไม่ได้ทันที (ต่างจาก local server) — ร้านขาย
-  เครื่องดื่มแบบนี้ควรเลี่ยงจุดอ่อนนี้ถ้าเป็นไปได้
 
 ## NAS
 

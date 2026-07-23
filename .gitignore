@@ -23,8 +23,6 @@ logs
 .env.*
 !.env.example
 
-# SQLite database
-/data/*.db
-/data/*.db-*
-/data/backups/
-/data/uploads/
+# Local leftovers from the pre-Postgres/pre-Blob setup
+/data/*
+!/data/.gitkeep

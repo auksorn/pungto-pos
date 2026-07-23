@@ -19,6 +19,7 @@
     "@iconify-json/simple-icons": "^1.2.90",
     "@nuxt/fonts": "^0.14.0",
     "@nuxt/ui": "^4.10.0",
+    "@vercel/blob": "^2.6.1",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "nuxt": "^4.4.8",
