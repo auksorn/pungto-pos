@@ -121,46 +121,46 @@ export default defineEventHandler(async (event) => {
     change = received - total
   }
 
-  const createdId = db.transaction((tx) => {
-    const [order] = tx.insert(orders).values({
+  const createdId = await db.transaction(async (tx) => {
+    const [order] = await tx.insert(orders).values({
       branchId,
       employeeId,
       status: 'paid',
       note,
       discountAmount
-    }).returning().all()
+    }).returning()
 
-    tx.insert(orderItems).values(resolvedItems.map(({ item, product, unitPrice, resolvedOptions }) => ({
-      orderId: order.id,
+    await tx.insert(orderItems).values(resolvedItems.map(({ item, product, unitPrice, resolvedOptions }) => ({
+      orderId: order!.id,
       productId: product.id,
       quantity: item.quantity,
       price: unitPrice,
       options: resolvedOptions.length ? resolvedOptions : null
-    }))).run()
+    })))
 
-    tx.insert(payments).values({ orderId: order.id, method, amount: total }).run()
+    await tx.insert(payments).values({ orderId: order!.id, method, amount: total })
 
     // Best-effort auto-deduct: if this branch doesn't stock an ingredient the
     // recipe calls for, skip it rather than blocking the sale (payment is
     // always immediate here — see TODO.md section 5/6).
     for (const [ingredientId, quantity] of consumption) {
-      const stockItem = tx.select().from(stockItems)
+      const [stockItem] = await tx.select().from(stockItems)
         .where(and(eq(stockItems.branchId, branchId), eq(stockItems.ingredientId, ingredientId)))
-        .get()
+        .limit(1)
       if (!stockItem) continue
 
-      tx.update(stockItems).set({ quantity: stockItem.quantity - quantity }).where(eq(stockItems.id, stockItem.id)).run()
-      tx.insert(stockTransactions).values({
+      await tx.update(stockItems).set({ quantity: stockItem.quantity - quantity }).where(eq(stockItems.id, stockItem.id))
+      await tx.insert(stockTransactions).values({
         stockItemId: stockItem.id,
         branchId,
         employeeId,
         type: 'out',
         quantity,
-        refOrderId: order.id
-      }).run()
+        refOrderId: order!.id
+      })
     }
 
-    return order.id
+    return order!.id
   })
 
   return { order: await getOrderDetail(createdId), change }

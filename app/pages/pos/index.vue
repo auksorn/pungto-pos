@@ -1,111 +1,111 @@
 <script setup lang="ts">
 interface Category {
-  id: number;
-  name: string;
-  sortOrder: number;
+  id: number
+  name: string
+  sortOrder: number
 }
 
 interface OptionChoice {
-  id: number;
-  optionGroupId: number;
-  name: string;
-  priceDelta: number;
+  id: number
+  optionGroupId: number
+  name: string
+  priceDelta: number
 }
 
 interface OptionGroup {
-  id: number;
-  productId: number;
-  name: string;
-  isRequired: boolean;
-  choices: OptionChoice[];
+  id: number
+  productId: number
+  name: string
+  isRequired: boolean
+  choices: OptionChoice[]
 }
 
 interface Product {
-  id: number;
-  name: string;
-  price: number;
-  categoryId: number | null;
-  imageUrl: string | null;
-  isActive: boolean;
-  optionGroups: OptionGroup[];
+  id: number
+  name: string
+  price: number
+  categoryId: number | null
+  imageUrl: string | null
+  isActive: boolean
+  optionGroups: OptionGroup[]
 }
 
 interface CartLineOption {
-  groupId: number;
-  choiceId: number;
-  name: string;
-  priceDelta: number;
+  groupId: number
+  choiceId: number
+  name: string
+  priceDelta: number
 }
 
 interface CartLine {
-  key: string;
-  productId: number;
-  name: string;
-  price: number;
-  quantity: number;
-  options: CartLineOption[];
+  key: string
+  productId: number
+  name: string
+  price: number
+  quantity: number
+  options: CartLineOption[]
 }
 
-const toast = useToast();
-const { user } = useUserSession();
+const toast = useToast()
+const { user } = useUserSession()
 
-const { data: categories } = await useFetch<Category[]>("/api/categories");
-const { data: products } = await useFetch<Product[]>("/api/products");
+const { data: categories } = await useFetch<Category[]>('/api/categories')
+const { data: products } = await useFetch<Product[]>('/api/products')
 
 const activeProducts = computed(() =>
-  (products.value ?? []).filter((p) => p.isActive),
-);
-const selectedCategoryId = ref<number | "all">("all");
+  (products.value ?? []).filter(p => p.isActive)
+)
+const selectedCategoryId = ref<number | 'all'>('all')
 
 // ---------- Identify who's actually taking orders on this terminal ----------
 // A shared POS terminal might stay logged into one account all shift, so we
 // ask for the receiving staff member's own PIN when the page loads, the same
 // way the header's clock-in/out kiosk does — see /api/employees/identify.
-const identifyModalOpen = ref(true);
-const identifyCode = ref("");
-const identifyLoading = ref(false);
-const receivingEmployee = ref<{ id: number; name: string } | null>(null);
+const identifyModalOpen = ref(true)
+const identifyCode = ref('')
+const identifyLoading = ref(false)
+const receivingEmployee = ref<{ id: number, name: string } | null>(null)
 
 function openIdentifyModal() {
-  identifyCode.value = "";
-  identifyModalOpen.value = true;
+  identifyCode.value = ''
+  identifyModalOpen.value = true
 }
 
 async function submitIdentify() {
-  identifyLoading.value = true;
+  identifyLoading.value = true
   try {
-    receivingEmployee.value = await $fetch<{ id: number; name: string }>(
-      "/api/employees/identify",
-      { method: "POST", body: { code: identifyCode.value } },
-    );
-    identifyModalOpen.value = false;
+    receivingEmployee.value = await $fetch<{ id: number, name: string }>(
+      '/api/employees/identify',
+      { method: 'POST', body: { code: identifyCode.value } }
+    )
+    identifyModalOpen.value = false
   } catch (err: any) {
     toast.add({
-      title: err?.data?.statusMessage ?? "รหัสไม่ถูกต้อง",
-      color: "error",
-    });
+      title: err?.data?.statusMessage ?? 'รหัสไม่ถูกต้อง',
+      color: 'error'
+    })
   } finally {
-    identifyLoading.value = false;
+    identifyLoading.value = false
   }
 }
 
 function skipIdentify() {
-  receivingEmployee.value = null;
-  identifyCode.value = "";
-  identifyModalOpen.value = false;
+  receivingEmployee.value = null
+  identifyCode.value = ''
+  identifyModalOpen.value = false
 }
 
 const filteredProducts = computed(() => {
-  if (selectedCategoryId.value === "all") return activeProducts.value;
+  if (selectedCategoryId.value === 'all') return activeProducts.value
   return activeProducts.value.filter(
-    (p) => p.categoryId === selectedCategoryId.value,
-  );
-});
+    p => p.categoryId === selectedCategoryId.value
+  )
+})
 
 interface ProductGroup {
-  key: string;
-  label: string | null;
-  products: Product[];
+  key: string
+  label: string | null
+  products: Product[]
 }
 
 // On the "all" tab, group products by category (server already returns
@@ -113,208 +113,208 @@ interface ProductGroup {
 // into one undifferentiated grid. A specific category tab stays a single
 // flat group with no heading, since it'd just repeat the tab's own label.
 const productGroups = computed<ProductGroup[]>(() => {
-  if (selectedCategoryId.value !== "all") {
-    return [{ key: "filtered", label: null, products: filteredProducts.value }];
+  if (selectedCategoryId.value !== 'all') {
+    return [{ key: 'filtered', label: null, products: filteredProducts.value }]
   }
   const groups = (categories.value ?? [])
-    .map((c) => ({
+    .map(c => ({
       key: String(c.id),
       label: c.name,
-      products: activeProducts.value.filter((p) => p.categoryId === c.id),
+      products: activeProducts.value.filter(p => p.categoryId === c.id)
     }))
-    .filter((g) => g.products.length);
+    .filter(g => g.products.length)
   const uncategorized = activeProducts.value.filter(
-    (p) => p.categoryId == null,
-  );
+    p => p.categoryId == null
+  )
   if (uncategorized.length) {
     groups.push({
-      key: "uncategorized",
-      label: "ไม่มีหมวดหมู่",
-      products: uncategorized,
-    });
+      key: 'uncategorized',
+      label: 'ไม่มีหมวดหมู่',
+      products: uncategorized
+    })
   }
-  return groups;
-});
+  return groups
+})
 
-const cart = ref<CartLine[]>([]);
+const cart = ref<CartLine[]>([])
 
 function lineKey(productId: number, options: CartLineOption[]) {
   const sorted = [...options]
     .sort((a, b) => a.groupId - b.groupId)
-    .map((o) => `${o.groupId}:${o.choiceId}`);
-  return `${productId}|${sorted.join(",")}`;
+    .map(o => `${o.groupId}:${o.choiceId}`)
+  return `${productId}|${sorted.join(',')}`
 }
 
 function addLine(product: Product, options: CartLineOption[]) {
-  const key = lineKey(product.id, options);
-  const existing = cart.value.find((l) => l.key === key);
+  const key = lineKey(product.id, options)
+  const existing = cart.value.find(l => l.key === key)
   if (existing) {
-    existing.quantity++;
-    return;
+    existing.quantity++
+    return
   }
-  const price =
-    product.price + options.reduce((sum, o) => sum + o.priceDelta, 0);
+  const price
+    = product.price + options.reduce((sum, o) => sum + o.priceDelta, 0)
   cart.value.push({
     key,
     productId: product.id,
     name: product.name,
     price,
     quantity: 1,
-    options,
-  });
+    options
+  })
 }
 
 function addToCart(product: Product) {
   if (product.optionGroups.length) {
-    openOptionModal(product);
-    return;
+    openOptionModal(product)
+    return
   }
-  addLine(product, []);
+  addLine(product, [])
 }
 
 function incLine(line: CartLine) {
-  line.quantity++;
+  line.quantity++
 }
 
 function decLine(line: CartLine) {
-  line.quantity--;
+  line.quantity--
   if (line.quantity <= 0) {
-    cart.value = cart.value.filter((l) => l.key !== line.key);
+    cart.value = cart.value.filter(l => l.key !== line.key)
   }
 }
 
 function removeLine(line: CartLine) {
-  cart.value = cart.value.filter((l) => l.key !== line.key);
+  cart.value = cart.value.filter(l => l.key !== line.key)
 }
 
 const subtotal = computed(() =>
-  cart.value.reduce((sum, l) => sum + l.price * l.quantity, 0),
-);
-const orderNote = ref("");
+  cart.value.reduce((sum, l) => sum + l.price * l.quantity, 0)
+)
+const orderNote = ref('')
 
 function clearCart() {
-  if (!cart.value.length) return;
-  if (!window.confirm("ล้างออเดอร์ปัจจุบันทั้งหมด?")) return;
-  cart.value = [];
-  orderNote.value = "";
+  if (!cart.value.length) return
+  if (!window.confirm('ล้างออเดอร์ปัจจุบันทั้งหมด?')) return
+  cart.value = []
+  orderNote.value = ''
 }
 
 // ---------- Option selection (sweetness, size, pearls, ...) ----------
 
-const optionModalOpen = ref(false);
-const optionModalProduct = ref<Product | null>(null);
-const optionSelections = reactive<Record<number, number | undefined>>({});
+const optionModalOpen = ref(false)
+const optionModalProduct = ref<Product | null>(null)
+const optionSelections = reactive<Record<number, number | undefined>>({})
 
 function openOptionModal(product: Product) {
-  optionModalProduct.value = product;
+  optionModalProduct.value = product
   // Stale entries from a previously opened product are harmless — only the
   // current product's own group ids are ever read.
   for (const group of product.optionGroups) {
-    optionSelections[group.id] = group.choices[0]?.id;
+    optionSelections[group.id] = group.choices[0]?.id
   }
-  optionModalOpen.value = true;
+  optionModalOpen.value = true
 }
 
 const canConfirmOptions = computed(() => {
-  const product = optionModalProduct.value;
-  if (!product) return false;
+  const product = optionModalProduct.value
+  if (!product) return false
   return product.optionGroups.every(
-    (group) => !group.isRequired || optionSelections[group.id] != null,
-  );
-});
+    group => !group.isRequired || optionSelections[group.id] != null
+  )
+})
 
 function confirmOptionModal() {
-  const product = optionModalProduct.value;
-  if (!product || !canConfirmOptions.value) return;
-  const options: CartLineOption[] = [];
+  const product = optionModalProduct.value
+  if (!product || !canConfirmOptions.value) return
+  const options: CartLineOption[] = []
   for (const group of product.optionGroups) {
-    const choiceId = optionSelections[group.id];
-    if (choiceId == null) continue;
-    const choice = group.choices.find((c) => c.id === choiceId);
-    if (!choice) continue;
+    const choiceId = optionSelections[group.id]
+    if (choiceId == null) continue
+    const choice = group.choices.find(c => c.id === choiceId)
+    if (!choice) continue
     options.push({
       groupId: group.id,
       choiceId: choice.id,
       name: choice.name,
-      priceDelta: choice.priceDelta,
-    });
+      priceDelta: choice.priceDelta
+    })
   }
-  addLine(product, options);
-  optionModalOpen.value = false;
+  addLine(product, options)
+  optionModalOpen.value = false
 }
 
 // ---------- Checkout ----------
 
 const methodLabels = {
-  cash: "เงินสด",
-  transfer: "โอนเงิน",
-  qr: "QR พร้อมเพย์",
-} as const;
+  cash: 'เงินสด',
+  transfer: 'โอนเงิน',
+  qr: 'QR พร้อมเพย์'
+} as const
 
-const payModalOpen = ref(false);
-const method = ref<keyof typeof methodLabels>("cash");
-const amountReceived = ref(0);
-const discountAmount = ref(0);
-const paying = ref(false);
+const payModalOpen = ref(false)
+const method = ref<keyof typeof methodLabels>('cash')
+const amountReceived = ref(0)
+const discountAmount = ref(0)
+const paying = ref(false)
 
 const payTotal = computed(() =>
-  Math.max(0, subtotal.value - (discountAmount.value || 0)),
-);
+  Math.max(0, subtotal.value - (discountAmount.value || 0))
+)
 const change = computed(() =>
-  method.value === "cash"
+  method.value === 'cash'
     ? Math.max(0, amountReceived.value - payTotal.value)
-    : 0,
-);
+    : 0
+)
 
 function openPayModal() {
-  if (!cart.value.length) return;
-  method.value = "cash";
-  discountAmount.value = 0;
-  amountReceived.value = subtotal.value;
-  payModalOpen.value = true;
+  if (!cart.value.length) return
+  method.value = 'cash'
+  discountAmount.value = 0
+  amountReceived.value = subtotal.value
+  payModalOpen.value = true
 }
 
 async function confirmCheckout() {
-  paying.value = true;
+  paying.value = true
   try {
-    const res = await $fetch<{ order: { id: number }; change: number }>(
-      "/api/orders/checkout",
+    const res = await $fetch<{ order: { id: number }, change: number }>(
+      '/api/orders/checkout',
       {
-        method: "POST",
+        method: 'POST',
         body: {
-          items: cart.value.map((l) => ({
+          items: cart.value.map(l => ({
             productId: l.productId,
             quantity: l.quantity,
-            options: l.options.map((o) => ({
+            options: l.options.map(o => ({
               groupId: o.groupId,
-              choiceId: o.choiceId,
-            })),
+              choiceId: o.choiceId
+            }))
           })),
           method: method.value,
           amountReceived:
-            method.value === "cash" ? amountReceived.value : undefined,
+            method.value === 'cash' ? amountReceived.value : undefined,
           note: orderNote.value.trim() || undefined,
           discountAmount: discountAmount.value || undefined,
           receivingCode: receivingEmployee.value
             ? identifyCode.value
-            : undefined,
-        },
-      },
-    );
-    cart.value = [];
-    orderNote.value = "";
-    payModalOpen.value = false;
+            : undefined
+        }
+      }
+    )
+    cart.value = []
+    orderNote.value = ''
+    payModalOpen.value = false
     await navigateTo({
       path: `/pos/orders/${res.order.id}`,
-      query: res.change ? { change: res.change } : undefined,
-    });
+      query: res.change ? { change: res.change } : undefined
+    })
   } catch (err: any) {
     toast.add({
-      title: err?.data?.statusMessage ?? "ชำระเงินไม่สำเร็จ",
-      color: "error",
-    });
+      title: err?.data?.statusMessage ?? 'ชำระเงินไม่สำเร็จ',
+      color: 'error'
+    })
   } finally {
-    paying.value = false;
+    paying.value = false
   }
 }
 </script>
@@ -347,8 +347,14 @@ async function confirmCheckout() {
         </div>
 
         <div class="flex flex-col gap-6">
-          <div v-for="group in productGroups" :key="group.key">
-            <h3 v-if="group.label" class="font-semibold text-muted mb-3">
+          <div
+            v-for="group in productGroups"
+            :key="group.key"
+          >
+            <h3
+              v-if="group.label"
+              class="font-semibold text-muted mb-3"
+            >
               {{ group.label }}
             </h3>
             <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -363,12 +369,15 @@ async function confirmCheckout() {
                   v-if="product.imageUrl"
                   :src="product.imageUrl"
                   class="w-full aspect-4/3 object-cover"
-                />
+                >
                 <div
                   v-else
                   class="w-full aspect-4/3 bg-elevated flex items-center justify-center"
                 >
-                  <UIcon name="i-lucide-coffee" class="size-8 text-dimmed" />
+                  <UIcon
+                    name="i-lucide-coffee"
+                    class="size-8 text-dimmed"
+                  />
                 </div>
                 <div class="p-3">
                   <p class="font-semibold text-base truncate">
@@ -394,7 +403,9 @@ async function confirmCheckout() {
         <template #header>
           <div class="flex flex-col gap-3">
             <div class="flex items-center justify-between gap-2">
-              <h2 class="font-bold text-lg">ออเดอร์ปัจจุบัน</h2>
+              <h2 class="font-bold text-lg">
+                ออเดอร์ปัจจุบัน
+              </h2>
               <UButton
                 v-if="cart.length"
                 icon="i-lucide-trash-2"
@@ -416,17 +427,12 @@ async function confirmCheckout() {
                 class="size-5 text-primary shrink-0"
               />
               <span class="flex-1 min-w-0 text-left">
-                <span class="block text-xs text-primary/80 leading-tight"
-                  >ผู้รับออเดอร์</span
-                >
+                <span class="block text-xs text-primary/80 leading-tight">ผู้รับออเดอร์</span>
                 <span
                   class="block font-bold text-primary truncate leading-tight"
-                  >{{ receivingEmployee?.name ?? user?.name ?? "-" }}</span
-                >
+                >{{ receivingEmployee?.name ?? user?.name ?? "-" }}</span>
               </span>
-              <span class="text-xs text-primary underline shrink-0"
-                >เปลี่ยน</span
-              >
+              <span class="text-xs text-primary underline shrink-0">เปลี่ยน</span>
             </button>
           </div>
         </template>
@@ -443,7 +449,10 @@ async function confirmCheckout() {
               <p class="truncate font-medium">
                 {{ line.name }}
               </p>
-              <p v-if="line.options.length" class="text-sm text-muted truncate">
+              <p
+                v-if="line.options.length"
+                class="text-sm text-muted truncate"
+              >
                 {{ line.options.map((o) => o.name).join(", ") }}
               </p>
               <p class="text-sm text-muted">
@@ -480,13 +489,19 @@ async function confirmCheckout() {
               />
             </div>
           </div>
-          <p v-if="!cart.length" class="text-muted text-sm py-6 text-center">
+          <p
+            v-if="!cart.length"
+            class="text-muted text-sm py-6 text-center"
+          >
             แตะสินค้าเพื่อเพิ่มลงออเดอร์
           </p>
         </div>
 
         <template #footer>
-          <UFormField label="โต๊ะ/ชื่อลูกค้า/คิว (ถ้ามี)" class="mb-3">
+          <UFormField
+            label="โต๊ะ/ชื่อลูกค้า/คิว (ถ้ามี)"
+            class="mb-3"
+          >
             <UInput
               v-model="orderNote"
               size="lg"
@@ -603,7 +618,10 @@ async function confirmCheckout() {
           >
             <p class="font-medium mb-2.5">
               {{ group.name }}
-              <span v-if="group.isRequired" class="text-error">*</span>
+              <span
+                v-if="group.isRequired"
+                class="text-error"
+              >*</span>
             </p>
             <URadioGroup
               v-model="optionSelections[group.id]"
@@ -612,7 +630,7 @@ async function confirmCheckout() {
               :items="
                 group.choices.map((c) => ({
                   label: `${c.name}${c.priceDelta ? ` (${c.priceDelta > 0 ? '+' : ''}${c.priceDelta.toFixed(2)} บาท)` : ''}`,
-                  value: c.id,
+                  value: c.id
                 }))
               "
             />

@@ -43,17 +43,17 @@ export default defineEventHandler(async (event) => {
 
   const reason = body?.reason?.trim() || null
 
-  const updated = db.transaction((tx) => {
-    tx.insert(stockTransactions).values({
+  const updated = await db.transaction(async (tx) => {
+    await tx.insert(stockTransactions).values({
       stockItemId,
       branchId: item.branchId,
       employeeId: user.id,
       type,
       quantity: body.quantity!,
       reason
-    }).run()
+    })
 
-    const [updatedItem] = tx.update(stockItems).set({ quantity: newQuantity }).where(eq(stockItems.id, stockItemId)).returning().all()
+    const [updatedItem] = await tx.update(stockItems).set({ quantity: newQuantity }).where(eq(stockItems.id, stockItemId)).returning()
     return updatedItem
   })
 

@@ -37,5 +37,5 @@ export default defineEventHandler(async (event) => {
   }
 
   const [row] = await db.insert(productIngredients).values({ productId, ingredientId, quantity }).returning()
-  return db.query.productIngredients.findFirst({ where: eq(productIngredients.id, row.id), with: { ingredient: true } })
+  return db.query.productIngredients.findFirst({ where: eq(productIngredients.id, row!.id), with: { ingredient: true } })
 })

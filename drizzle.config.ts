@@ -1,10 +1,12 @@
+import 'dotenv/config'
 import { defineConfig } from 'drizzle-kit'
 
 export default defineConfig({
   schema: './server/db/schema.ts',
   out: './server/db/migrations',
-  dialect: 'sqlite',
+  dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? './data/pos.db'
+    // Direct (non-pooled) endpoint — safer for DDL than going through pgbouncer.
+    url: process.env.DATABASE_URL_UNPOOLED!
   }
 })

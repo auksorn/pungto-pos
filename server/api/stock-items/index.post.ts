@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
       ingredientId = existing.id
     } else {
       const [created] = await db.insert(ingredients).values({ name, unit, costPerUnit: body?.costPerUnit ?? 0, imageUrl: body?.imageUrl ?? null }).returning()
-      ingredientId = created.id
+      ingredientId = created!.id
     }
   }
 
@@ -61,5 +61,5 @@ export default defineEventHandler(async (event) => {
     minThreshold: body?.minThreshold ?? 0
   }).returning()
 
-  return db.query.stockItems.findFirst({ where: eq(stockItems.id, item.id), with: { ingredient: true } })
+  return db.query.stockItems.findFirst({ where: eq(stockItems.id, item!.id), with: { ingredient: true } })
 })

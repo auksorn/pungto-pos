@@ -12,9 +12,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'invalid id' })
   }
 
-  const deleted = db.transaction((tx) => {
-    tx.delete(optionChoices).where(eq(optionChoices.optionGroupId, id)).run()
-    return tx.delete(optionGroups).where(eq(optionGroups.id, id)).returning().all()
+  const deleted = await db.transaction(async (tx) => {
+    await tx.delete(optionChoices).where(eq(optionChoices.optionGroupId, id))
+    return tx.delete(optionGroups).where(eq(optionGroups.id, id)).returning()
   })
   if (!deleted.length) {
     throw createError({ statusCode: 404, statusMessage: 'ไม่พบตัวเลือก' })

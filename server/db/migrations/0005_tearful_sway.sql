@@ -1,1 +1,0 @@
-ALTER TABLE `ingredients` ADD `image_url` text;

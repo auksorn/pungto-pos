@@ -40,8 +40,8 @@ export default defineEventHandler(async (event) => {
     .where(paidInRange)
 
   const periodExpr = groupBy === 'month'
-    ? sql<string>`strftime('%Y-%m', ${orders.createdAt}, 'unixepoch', 'localtime')`
-    : sql<string>`strftime('%Y-%m-%d', ${orders.createdAt}, 'unixepoch', 'localtime')`
+    ? sql<string>`to_char(${orders.createdAt} AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM')`
+    : sql<string>`to_char(${orders.createdAt} AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD')`
 
   const trend = await db.select({ period: periodExpr, revenue: revenueExpr, orderCount: orderCountExpr })
     .from(orders)

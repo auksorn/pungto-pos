@@ -1,1 +1,0 @@
-ALTER TABLE `stock_transactions` ADD `employee_id` integer NOT NULL REFERENCES employees(id);

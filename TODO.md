@@ -1,12 +1,12 @@
 # TODO - ระบบ POS ร้านบังโต
 
 ร้านขายเครื่องดื่ม (ชานมไข่มุก, มัชฉะ ฯลฯ) และขนมเล็กๆน้อยๆ
-Stack: Nuxt 3 (fullstack) + SQLite
+Stack: Nuxt 3 (fullstack) + Postgres (Neon)
 
 ## 0. Project Setup
 - [x] Init Nuxt 3 project (`nuxi init`, Nuxt UI template, npm)
-- [x] เลือก ORM สำหรับ SQLite (Drizzle ORM + better-sqlite3)
-- [x] ตั้งค่า SQLite database file + migration tool (drizzle-kit, `data/pos.db`)
+- [x] เลือก ORM สำหรับ Postgres (Drizzle ORM + node-postgres, เดิมเป็น SQLite/better-sqlite3)
+- [x] ตั้งค่า Neon Postgres database + migration tool (drizzle-kit)
 - [x] ตั้งค่า UI framework (Nuxt UI / Tailwind v4, มากับ template)
 - [x] ตั้งค่า ESLint/Prettier, tsconfig (มากับ template)
 - [x] โครงสร้าง server API (`server/api/**`) และ layer สำหรับ multi-branch — ครบทุกโดเมน (auth, branches, employees, categories, products, option-groups, ingredients, stock-items, orders, reports, time-entries) ใช้ `requireRole`/`getEffectiveBranchId`/`requireEffectiveBranchId` ร่วมกันเป็น layer กลาง
@@ -98,7 +98,7 @@ Stack: Nuxt 3 (fullstack) + SQLite
 
 ## 9. Non-functional / Deployment
 - [x] Responsive UI สำหรับ tablet (หน้าจอขายหน้าร้าน) — หน้า POS ใช้ layout แบบสินค้า+ตะกร้าคู่กันตั้งแต่จอ ≥768px (md) แทนที่จะรอจอเดสก์ท็อป (เดิม ≥1024px), ปรับจำนวนคอลัมน์ตารางสินค้า/การ์ดสรุปในหน้ารายงานให้ไล่ระดับตามความกว้างจอถี่ขึ้น — **หมายเหตุ: ตรวจสอบด้วยการอ่านโค้ด/breakpoint เท่านั้น ไม่มีเครื่องมือ screenshot บนแท็บเล็ตจริงในสภาพแวดล้อมนี้ ควรลองเปิดจริงบนแท็บเล็ตก่อนใช้งานหน้าร้าน**
-- [x] Backup ฐานข้อมูล SQLite (scheduled backup) — `npm run db:backup` ใช้ better-sqlite3 online backup API คัดลอกไป `data/backups/` (เก็บ 14 ไฟล์ล่าสุด) ปลอดภัยรันตอนแอปทำงานอยู่; วิธีตั้งให้รันอัตโนมัติทุกวันดูใน [DEPLOYMENT.md](DEPLOYMENT.md)
+- [x] Backup ฐานข้อมูล — ย้ายไป Neon Postgres แล้ว ใช้ point-in-time recovery/branching ในตัวของ Neon แทนสคริปต์ backup เดิม (ดู [DEPLOYMENT.md](DEPLOYMENT.md))
 - [x] Error handling + validation (server-side) — ตรวจสอบทุก endpoint ใน `server/api/**` เพิ่มการตรวจสิทธิ์ตามสาขา (branch-scope) ที่ขาดใน stock-items PATCH/DELETE, เพิ่ม validation ที่ขาดสำหรับ ingredientId/minThreshold/categoryId/sortOrder, ลดข้อมูลที่ health check เปิดเผยแบบไม่ล็อกอิน
 - [x] Seed data สำหรับทดสอบ (เมนู, สาขา, พนักงานตัวอย่าง) — `npm run db:seed` เพิ่มสาขาที่ 2, บัญชี manager/staff ตัวอย่าง, สินค้า/หมวดหมู่/วัตถุดิบ (พร้อมต้นทุน)/สูตร/ตัวเลือกสินค้าตัวอย่าง — รันซ้ำได้ปลอดภัย (idempotent ตรวจจาก name/username เดิม)
 - [x] Deploy plan (เช่น host บน VPS/NAS, หรือ local server ที่ร้าน) — ดู [DEPLOYMENT.md](DEPLOYMENT.md): แนะนำ local server ที่ร้านเป็นหลัก (ไม่พึ่งเน็ต/ไม่มีค่าใช้จ่ายรายเดือน) พร้อมทางเลือก VPS/NAS

@@ -12,8 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx server/db/seed.ts",
-    "db:backup": "tsx server/db/backup.ts"
+    "db:seed": "tsx server/db/seed.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.117",
@@ -21,16 +20,16 @@
     "@nuxt/fonts": "^0.14.0",
     "@nuxt/ui": "^4.10.0",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2",
     "nuxt": "^4.4.8",
     "nuxt-auth-utils": "^0.5.29",
+    "pg": "^8.22.0",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.16.0",
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.20.0",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.7.0",
